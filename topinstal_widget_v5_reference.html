@@ -1,0 +1,276 @@
+
+<h2 class="sr-only">Referencja wizualna widgetu doboru pompy ciepła TOP-INSTAL — wersja finalna v5</h2>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.w{background:#0d0d0d;border:1px solid #2a2a2a;border-radius:3px;width:320px;margin:0 auto;overflow:visible;font-family:var(--font-sans)}
+.hdr{padding:9px 13px;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;justify-content:space-between}
+.hdr-l{display:flex;flex-direction:column;gap:1px}
+.hdr-tag{font-size:8px;color:#c0392b;letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:4px}
+.pulse{width:4px;height:4px;background:#c0392b;border-radius:50%;animation:pu 2s infinite}
+@keyframes pu{0%,100%{opacity:1}50%{opacity:.2}}
+.hdr-title{font-size:11px;font-weight:500;color:#ccc;letter-spacing:.2px}
+.hdr-r{font-size:8px;color:#333;letter-spacing:1px;text-transform:uppercase;text-align:right;line-height:1.4}
+.bar{display:flex;height:2px}
+.bs{flex:1;background:#1a1a1a;transition:background .25s}
+.bs.a{background:#888}
+.bs.d{background:#c0392b}
+.body{padding:12px 13px;overflow:visible}
+.st{display:none}
+.st.on{display:block}
+.step-lbl{font-size:8px;color:#444;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.step-lbl span{color:#c0392b}
+.qh{font-size:14px;font-weight:500;color:#e0e0e0;letter-spacing:-.3px;margin-bottom:12px;line-height:1.2}
+.grid22{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.cell{display:flex;flex-direction:column;gap:3px;position:relative}
+.cell-lbl{font-size:7px;color:#444;letter-spacing:1.5px;text-transform:uppercase}
+.dd{background:#090909;border:1px solid #1e1e1e;padding:7px 8px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:border-color .12s;min-height:34px}
+.dd:hover{border-color:#333}
+.dd.open{border-color:#c0392b}
+.dd-val{font-size:10px;color:#444;display:flex;align-items:center;gap:5px;font-weight:500;min-width:0;overflow:hidden}
+.dd-val i{font-size:12px;color:#2e2e2e;flex-shrink:0}
+.dd-val span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd.has-val .dd-val{color:#ccc}
+.dd.has-val .dd-val i{color:#c0392b}
+.dd-arr{font-size:10px;color:#2a2a2a;transition:transform .15s;flex-shrink:0}
+.dd.open .dd-arr{transform:rotate(180deg);color:#666}
+.dd-opts{background:#0a0a0a;border:1px solid #c0392b;border-top:none;position:absolute;top:100%;left:0;right:0;z-index:100;display:none}
+.dd.open~.dd-opts{display:block}
+.dd-opt{padding:7px 9px;font-size:10px;color:#555;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .1s}
+.dd-opt i{font-size:11px;color:#2e2e2e}
+.dd-opt:hover{background:#1a1a1a;color:#999}
+.dd-opt.sel{color:#ccc;background:#0e0404}
+.dd-opt.sel i{color:#c0392b}
+.dd-sep{height:1px;background:#1a1a1a}
+.surf-cell{display:flex;flex-direction:column;gap:3px}
+.sv{font-size:18px;font-weight:500;color:#e0e0e0;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1;margin-top:1px}
+.sv em{font-size:10px;color:#444;font-style:normal;font-weight:400;margin-left:1px}
+input[type=range]{width:100%;accent-color:#c0392b;margin-top:5px;height:2px;display:block}
+.btn-r{width:100%;border:none;padding:11px;font-size:9px;font-weight:500;color:#fff;letter-spacing:2px;text-transform:uppercase;cursor:pointer;background:#c0392b;transition:opacity .12s;font-family:var(--font-sans);margin-top:2px}
+.btn-r:hover:not(:disabled){opacity:.82}
+.btn-r:disabled{background:#161616;color:#3a3a3a;cursor:default;border:1px solid #1e1e1e}
+.btn-line{width:100%;border:1px solid #2a2a2a;padding:9px;font-size:9px;font-weight:500;color:#555;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;background:transparent;margin-top:5px;transition:border-color .12s,color .12s;font-family:var(--font-sans)}
+.btn-line:hover{border-color:#444;color:#888}
+.feed{background:#060606;border:1px solid #1c1c1c;padding:8px;height:108px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:7px}
+.bbl{display:flex;gap:5px;align-items:flex-start}
+.bbl.me{justify-content:flex-end}
+.av{width:18px;height:18px;min-width:18px;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:500;color:#555;letter-spacing:.5px;flex-shrink:0}
+.bt{font-size:11px;line-height:1.5;padding:6px 9px;max-width:200px}
+.bbl.ai .bt{background:#111;color:#888;border-left:2px solid #c0392b}
+.bbl.me .bt{background:#c0392b;color:#fff}
+.ci-row{display:flex;gap:5px;margin-bottom:4px}
+.ci-row input{flex:1;background:#090909;border:1px solid #1e1e1e;padding:6px 9px;font-size:11px;color:#ccc;outline:none;font-family:var(--font-sans)}
+.ci-row input::placeholder{color:#2e2e2e}
+.ci-row input:focus{border-color:#c0392b}
+.ci-send{background:#c0392b;border:none;width:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.ci-send i{font-size:13px;color:#fff}
+.skip-q{font-size:8px;color:#333;background:none;border:none;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:var(--font-sans);padding:0;margin-bottom:5px;display:block}
+.skip-q:hover{color:#666}
+.rg{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px}
+.rc{background:#090909;border:1px solid #1c1c1c;padding:8px 9px}
+.rc.full{grid-column:1/-1}
+.rl{font-size:7px;font-weight:500;color:#3a3a3a;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px}
+.rv{font-size:12px;font-weight:500;color:#ccc;font-variant-numeric:tabular-nums}
+.rv.red{color:#c0392b;font-size:15px;letter-spacing:-.5px}
+.disc{font-size:9px;color:#2e2e2e;line-height:1.5;border-left:2px solid #1c1c1c;padding-left:7px;margin-bottom:8px}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.bk{font-size:8px;color:#333;background:none;border:none;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-family:var(--font-sans);padding:0;transition:color .12s}
+.bk:hover{color:#666}
+.sc{font-size:8px;color:#2a2a2a;letter-spacing:1px;text-transform:uppercase}
+.typ{display:flex;gap:3px;padding:6px 9px;background:#090909;border-left:2px solid #c0392b;width:fit-content;align-items:center}
+.typ span{width:3px;height:3px;background:#333;border-radius:50%;animation:td 1.2s infinite}
+.typ span:nth-child(2){animation-delay:.2s}
+.typ span:nth-child(3){animation-delay:.4s}
+@keyframes td{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.eng-badge{font-size:8px;color:#333;letter-spacing:1px;margin-top:4px;font-family:var(--font-sans)}
+.eng-badge span{color:#c0392b}
+</style>
+
+<div class="w">
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="hdr-tag"><div class="pulse"></div>Dobór bezpłatny · bez rejestracji</div>
+      <div class="hdr-title">Wstępny dobór pompy ciepła</div>
+    </div>
+    <div class="hdr-r">wynik<br>w ~60 s</div>
+  </div>
+  <div class="bar">
+    <div class="bs a" id="b0"></div>
+    <div class="bs" id="b1"></div>
+    <div class="bs" id="b2"></div>
+  </div>
+  <div class="body">
+
+    <div class="st on" id="p0">
+      <div class="step-lbl"><span>01</span> — Parametry budynku</div>
+      <div class="grid22">
+        <div class="cell">
+          <div class="cell-lbl">Typ budynku</div>
+          <div class="dd" id="dd-typ" onclick="toggleDd('typ')">
+            <div class="dd-val"><i class="ti ti-home" aria-hidden="true"></i><span id="dv-typ">Wybierz</span></div>
+            <i class="ti ti-chevron-down dd-arr" aria-hidden="true"></i>
+          </div>
+          <div class="dd-opts" id="do-typ">
+            <div class="dd-opt" data-q="typ" data-v="a" onclick="pickDd(this,'typ','Wolnostojący','ti-home')"><i class="ti ti-home" aria-hidden="true"></i>Wolnostojący</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="typ" data-v="b" onclick="pickDd(this,'typ','Bliźniak','ti-building')"><i class="ti ti-building" aria-hidden="true"></i>Bliźniak</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="typ" data-v="c" onclick="pickDd(this,'typ','Szeregowiec','ti-building-community')"><i class="ti ti-building-community" aria-hidden="true"></i>Szeregowiec</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="typ" data-v="d" onclick="pickDd(this,'typ','Inny','ti-layout-grid')"><i class="ti ti-layout-grid" aria-hidden="true"></i>Inny</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="cell-lbl">Standard budynku</div>
+          <div class="dd" id="dd-std" onclick="toggleDd('std')">
+            <div class="dd-val"><i class="ti ti-calendar" aria-hidden="true"></i><span id="dv-std">Wybierz</span></div>
+            <i class="ti ti-chevron-down dd-arr" aria-hidden="true"></i>
+          </div>
+          <div class="dd-opts" id="do-std">
+            <div class="dd-opt" data-q="std" data-v="a" onclick="pickDd(this,'std','Pre-1990','ti-calendar-off')"><i class="ti ti-calendar-off" aria-hidden="true"></i>Pre-1990</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="std" data-v="b" onclick="pickDd(this,'std','1990–2010','ti-calendar')"><i class="ti ti-calendar" aria-hidden="true"></i>1990–2010</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="std" data-v="c" onclick="pickDd(this,'std','Post-2010','ti-calendar-event')"><i class="ti ti-calendar-event" aria-hidden="true"></i>Post-2010</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="std" data-v="d" onclick="pickDd(this,'std','Post-2020','ti-certificate')"><i class="ti ti-certificate" aria-hidden="true"></i>Post-2020</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="cell-lbl">Źródło ciepła</div>
+          <div class="dd" id="dd-src" onclick="toggleDd('src')">
+            <div class="dd-val"><i class="ti ti-flame" aria-hidden="true"></i><span id="dv-src">Wybierz</span></div>
+            <i class="ti ti-chevron-down dd-arr" aria-hidden="true"></i>
+          </div>
+          <div class="dd-opts" id="do-src">
+            <div class="dd-opt" data-q="src" data-v="a" onclick="pickDd(this,'src','Węgiel','ti-flame')"><i class="ti ti-flame" aria-hidden="true"></i>Węgiel</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="src" data-v="b" onclick="pickDd(this,'src','Gaz','ti-gas-station')"><i class="ti ti-gas-station" aria-hidden="true"></i>Gaz</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="src" data-v="c" onclick="pickDd(this,'src','Olej','ti-droplet')"><i class="ti ti-droplet" aria-hidden="true"></i>Olej</div>
+            <div class="dd-sep"></div>
+            <div class="dd-opt" data-q="src" data-v="d" onclick="pickDd(this,'src','Prąd','ti-bolt')"><i class="ti ti-bolt" aria-hidden="true"></i>Prąd</div>
+          </div>
+        </div>
+        <div class="surf-cell">
+          <div class="cell-lbl">Powierzchnia</div>
+          <div class="sv" id="sv">120<em>m²</em></div>
+          <input type="range" min="60" max="400" step="10" value="120" oninput="document.getElementById('sv').innerHTML=this.value+'<em>m²</em>'">
+        </div>
+      </div>
+      <button class="btn-r" id="cb0" onclick="go(1)" disabled>Oblicz wstępnie →</button>
+    </div>
+
+    <div class="st" id="p1">
+      <div class="step-lbl"><span>02</span> — Diagnostyka</div>
+      <div class="feed" id="feed">
+        <div class="bbl ai"><div class="av">OZC</div><div class="bt">Czy instalacja jest podłogowa czy grzejnikowa — lub planujecie zmianę?</div></div>
+      </div>
+      <div class="ci-row">
+        <input type="text" id="ci" placeholder="Odpowiedź..." onkeydown="if(event.key==='Enter')snd()">
+        <button class="ci-send" onclick="snd()" aria-label="Wyślij"><i class="ti ti-arrow-up" aria-hidden="true"></i></button>
+      </div>
+      <button class="skip-q" onclick="skipQ()">← Pomiń to pytanie</button>
+      <button class="btn-line" onclick="go(2)">Pomiń resztę — pokaż wynik</button>
+      <div class="nav"><button class="bk" onclick="go(0)">← wróć</button><span class="sc">02 / 03</span></div>
+    </div>
+
+    <div class="st" id="p2">
+      <div class="step-lbl"><span>03</span> — Wynik OZC</div>
+      <div class="rg">
+        <div class="rc full">
+          <div class="rl">Rekomendowany model</div>
+          <div class="rv" style="font-size:11px;line-height:1.5;color:#aaa">Panasonic Aquarea K<br><span style="color:#c0392b;font-size:13px;font-weight:500">WH-MDC09J3E5</span></div>
+        </div>
+        <div class="rc"><div class="rl">Moc</div><div class="rv">9 kW</div></div>
+        <div class="rc"><div class="rl">COP A7/W35</div><div class="rv">3.8</div></div>
+        <div class="rc"><div class="rl">Bufor CO</div><div class="rv">100 L</div></div>
+        <div class="rc"><div class="rl">CWU</div><div class="rv">200 L</div></div>
+        <div class="rc full"><div class="rl">Szacunkowy koszt instalacji</div><div class="rv red">39 000 – 49 000 zł</div></div>
+      </div>
+      <div class="disc">Wynik orientacyjny — 8/20 parametrów potwierdzonych. Pełny audyt OZC wymagany dla wiążącego doboru.</div>
+      <div class="eng-badge">session <span id="sid">a3f9c1</span> · engagement zarejestrowany</div>
+      <button class="btn-line" style="margin-top:8px;margin-bottom:5px">↓ Przykładowa oferta PDF</button>
+      <button class="btn-r" onclick="sendPrompt('Chcę zapytać o dokładną wycenę TOP-INSTAL')">Chcę dokładną wycenę ↗</button>
+      <div class="nav"><button class="bk" onclick="go(0)">← od nowa</button><span style="font-size:8px;color:#c0392b;letter-spacing:1px;text-transform:uppercase">✓ obliczono</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var a={typ:null,std:null,src:null};
+var qi=0;
+var skipped=[];
+var qs=["Czy budynek jest po termomodernizacji?","Czy potrzebujecie podgrzewu CWU przez pompę?","Czy macie przygotowany dedykowany obwód elektryczny 3×16A?"];
+
+function toggleDd(key){
+  var dd=document.getElementById('dd-'+key);
+  var isOpen=dd.classList.contains('open');
+  ['typ','std','src'].forEach(function(k){document.getElementById('dd-'+k).classList.remove('open')});
+  if(!isOpen)dd.classList.add('open');
+}
+function pickDd(el,key,label,icon){
+  a[key]=el.dataset.v;
+  var dd=document.getElementById('dd-'+key);
+  dd.classList.remove('open');dd.classList.add('has-val');
+  document.getElementById('dv-'+key).textContent=label;
+  dd.querySelector('.dd-val i').className='ti '+icon;
+  document.querySelectorAll('[data-q="'+key+'"]').forEach(function(o){o.classList.remove('sel')});
+  el.classList.add('sel');
+  document.getElementById('cb0').disabled=Object.values(a).filter(Boolean).length<2;
+}
+function go(n){
+  ['p0','p1','p2'].forEach(function(id,i){
+    document.getElementById(id).classList.toggle('on',i===n);
+    document.getElementById('b'+i).className='bs'+(i<n?' d':i===n?' a':'');
+  });
+}
+function skipQ(){
+  if(qi<qs.length){
+    skipped.push(qs[qi]);
+    qi++;
+    var f=document.getElementById('feed');
+    var skip=document.createElement('div');
+    skip.className='bbl me';
+    skip.innerHTML='<div class="bt" style="background:#1a1a1a;color:#555">— pominięto</div>';
+    f.appendChild(skip);
+    if(qi<qs.length){
+      var ai=document.createElement('div');
+      ai.className='bbl ai';
+      ai.innerHTML='<div class="av">OZC</div><div class="bt">'+qs[qi]+'</div>';
+      f.appendChild(ai);
+      f.scrollTop=f.scrollHeight;
+    } else {
+      setTimeout(function(){go(2)},600);
+    }
+  }
+}
+function snd(){
+  var inp=document.getElementById('ci'),v=inp.value.trim();
+  if(!v)return;
+  var f=document.getElementById('feed');
+  var me=document.createElement('div');me.className='bbl me';
+  me.innerHTML='<div class="bt">'+v+'</div>';
+  f.appendChild(me);inp.value='';f.scrollTop=f.scrollHeight;
+  if(qi<qs.length){
+    var t=document.createElement('div');t.id='tp';
+    t.innerHTML='<div class="typ"><span></span><span></span><span></span></div>';
+    f.appendChild(t);f.scrollTop=f.scrollHeight;
+    setTimeout(function(){
+      var tp=document.getElementById('tp');if(tp)tp.remove();
+      var ai=document.createElement('div');ai.className='bbl ai';
+      ai.innerHTML='<div class="av">OZC</div><div class="bt">'+qs[qi]+'</div>';
+      f.appendChild(ai);qi++;f.scrollTop=f.scrollHeight;
+      if(qi>=qs.length){
+        setTimeout(function(){
+          var done=document.createElement('div');done.className='bbl ai';
+          done.innerHTML='<div class="av">OZC</div><div class="bt" style="color:#c0392b;border-left-color:#c0392b">Dane skompletowane. Uruchamiam obliczenia OZC...</div>';
+          f.appendChild(done);f.scrollTop=f.scrollHeight;
+          setTimeout(function(){go(2)},1100);
+        },400);
+      }
+    },800);
+  } else {setTimeout(function(){go(2)},300);}
+}
+document.getElementById('sid').textContent=Math.random().toString(36).substr(2,6);
+</script>
