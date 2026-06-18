@@ -23,6 +23,7 @@ require_once TOPINSTAL_LEAD_WIDGET_DIR . 'includes/class-calculator.php';
 require_once TOPINSTAL_LEAD_WIDGET_DIR . 'includes/class-chat.php';
 require_once TOPINSTAL_LEAD_WIDGET_DIR . 'includes/class-lead-registry.php';
 require_once TOPINSTAL_LEAD_WIDGET_DIR . 'includes/class-offer-dispatch.php';
+require_once TOPINSTAL_LEAD_WIDGET_DIR . 'includes/class-os-event-client.php';
 
 /**
  * Bootstrap plugin.
@@ -324,8 +325,8 @@ final class Topinstal_Lead_Widget_Plugin {
                     </tr>
                     <tr>
                         <th scope="row"><label for="node_b_registry_url">Node B registry URL</label></th>
-                        <td><input type="url" class="large-text" id="node_b_registry_url" name="topinstal_lead_widget_node_b_registry_url" value="<?php echo esc_attr(self::get_option('node_b_registry_url', 'http://127.0.0.1:8765')); ?>" />
-                        <p class="description">Baza gmail-agent (np. <code>http://127.0.0.1:8765</code>), nie cieplo-worker :8000.</p></td>
+                        <td><input type="url" class="large-text" id="node_b_registry_url" name="topinstal_lead_widget_node_b_registry_url" value="<?php echo esc_attr(self::get_option('node_b_registry_url', 'http://127.0.0.1:8766')); ?>" />
+                        <p class="description">Baza gmail-agent (np. <code>http://127.0.0.1:8766</code> host), nie cieplo-worker :8000.</p></td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="node_b_registry_token">Node B registry token</label></th>

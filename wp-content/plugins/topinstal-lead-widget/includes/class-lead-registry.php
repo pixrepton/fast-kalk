@@ -329,6 +329,20 @@ final class Topinstal_Lead_Widget_Lead_Registry {
 
 
         if ($code < 200 || $code >= 300 || !is_array($decoded)) {
+            Topinstal_Lead_Widget_Os_Event_Client::emit(
+                'fastkalk.registry.failed',
+                'Lead widget: rejestracja engagement w Node B nie powiodła się',
+                'error',
+                '',
+                array(
+                    'trace_id' => $trace_id,
+                    'error_code' => 'registry_http_' . $code,
+                ),
+                array(
+                    'trace_id' => $trace_id,
+                    'session_id' => $session_id,
+                )
+            );
 
             return array('ok' => false, 'error' => 'registry_http_' . $code);
 
@@ -574,7 +588,7 @@ final class Topinstal_Lead_Widget_Lead_Registry {
 
     private static function build_registry_request($collected, $result_summary, $trace_id, $session_id) {
 
-        $base = rtrim(Topinstal_Lead_Widget_Plugin::get_option('node_b_registry_url', 'http://127.0.0.1:8765'), '/');
+        $base = rtrim(Topinstal_Lead_Widget_Plugin::get_option('node_b_registry_url', 'http://127.0.0.1:8766'), '/');
 
         if ($base === '') {
 

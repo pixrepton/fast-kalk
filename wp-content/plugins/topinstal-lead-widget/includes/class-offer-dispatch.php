@@ -35,18 +35,65 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
         $pdf = self::generate_pdf($generator_base, $offer, $trace_id);
         if (is_wp_error($pdf)) {
             error_log('[topinstal-lead-widget] offer dispatch: ' . $pdf->get_error_message());
+            $engagement_id = Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id);
+            Topinstal_Lead_Widget_Os_Event_Client::emit(
+                'fastkalk.offer.failed',
+                'Lead widget: generacja lub wysyłka oferty nie powiodła się',
+                'error',
+                $engagement_id,
+                array(
+                    'trace_id' => $trace_id,
+                    'error_code' => (string) $pdf->get_error_code(),
+                ),
+                array(
+                    'trace_id' => $trace_id,
+                    'session_id' => $session_id,
+                )
+            );
             return array('delivered' => false, 'error' => $pdf->get_error_code());
         }
 
         $mail = self::send_emails($collected, $offer, $trace_id, $client_email, $pdf);
         if (is_wp_error($mail)) {
             error_log('[topinstal-lead-widget] offer mail: ' . $mail->get_error_message());
+            $engagement_id = Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id);
+            Topinstal_Lead_Widget_Os_Event_Client::emit(
+                'fastkalk.offer.failed',
+                'Lead widget: wysyłka maila z ofertą nie powiodła się',
+                'error',
+                $engagement_id,
+                array(
+                    'trace_id' => $trace_id,
+                    'error_code' => (string) $mail->get_error_code(),
+                ),
+                array(
+                    'trace_id' => $trace_id,
+                    'session_id' => $session_id,
+                )
+            );
             return array(
                 'delivered' => false,
                 'error' => $mail->get_error_code(),
                 'pdf_url' => isset($pdf['download_url']) ? (string) $pdf['download_url'] : '',
             );
         }
+
+        $engagement_id = Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id);
+        Topinstal_Lead_Widget_Os_Event_Client::emit(
+            'fastkalk.offer.delivered',
+            'Lead widget: oferta PDF dostarczona operatorem',
+            'ok',
+            $engagement_id,
+            array(
+                'trace_id' => $trace_id,
+                'operator_sent' => !empty($mail['operator_sent']),
+                'client_sent' => !empty($mail['client_sent']),
+            ),
+            array(
+                'trace_id' => $trace_id,
+                'session_id' => $session_id,
+            )
+        );
 
         return array(
             'delivered' => true,

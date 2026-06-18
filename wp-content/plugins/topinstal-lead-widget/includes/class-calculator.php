@@ -55,6 +55,25 @@ final class Topinstal_Lead_Widget_Calculator {
         $calc_request = Topinstal_Lead_Widget_Defaults::to_calc_request($collected);
         $offer = self::call_kalk_top($calc_request);
         if (is_wp_error($offer)) {
+            $trace_id = isset($calc_request['traceId']) ? (string) $calc_request['traceId'] : '';
+            $session_id = isset($calc_request['sessionId']) ? (string) $calc_request['sessionId'] : $session_id;
+            $error_data = $offer->get_error_data();
+            $http_status = is_array($error_data) && isset($error_data['status']) ? (int) $error_data['status'] : 0;
+            Topinstal_Lead_Widget_Os_Event_Client::emit(
+                'fastkalk.calculate.failed',
+                'Kalkulacja lead widget nie powiodła się',
+                'error',
+                Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id),
+                array(
+                    'trace_id' => $trace_id,
+                    'error_code' => (string) $offer->get_error_code(),
+                    'http_status' => $http_status > 0 ? $http_status : null,
+                ),
+                array(
+                    'trace_id' => $trace_id,
+                    'session_id' => $session_id,
+                )
+            );
             return $offer;
         }
 
@@ -92,6 +111,23 @@ final class Topinstal_Lead_Widget_Calculator {
             Topinstal_Lead_Widget_Session_Store::put_cached_calculate($session_id, $fingerprint, $summary);
             Topinstal_Lead_Widget_Session_Store::put_cached_offer($session_id, $fingerprint, $offer);
         }
+
+        Topinstal_Lead_Widget_Os_Event_Client::emit(
+            'fastkalk.calculate.success',
+            'Lead widget: oferta policzona',
+            'ok',
+            $engagement_id,
+            array(
+                'trace_id' => $trace_id,
+                'session_id' => $summary['sessionId'],
+                'cena_min' => isset($summary['cena_min']) ? (int) $summary['cena_min'] : null,
+                'cena_max' => isset($summary['cena_max']) ? (int) $summary['cena_max'] : null,
+            ),
+            array(
+                'trace_id' => $trace_id,
+                'session_id' => (string) $summary['sessionId'],
+            )
+        );
 
         return new WP_REST_Response($summary, 200);
     }
@@ -155,7 +191,7 @@ final class Topinstal_Lead_Widget_Calculator {
     }
 
     /**
-     * PHP built-in server (runtime :8090) cannot HTTP-call itself — use in-process REST.
+     * PHP built-in server (runtime :8091) cannot HTTP-call itself — use in-process REST.
      *
      * @param string $url
      * @return bool
