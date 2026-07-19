@@ -55,13 +55,27 @@ final class Topinstal_Lead_Widget_Chat {
             $collected = Topinstal_Lead_Widget_Defaults::sanitize_collected($collected);
         }
 
+        $system = self::build_system_prompt($collected);
+        $refinement_asked = isset($body['refinement_asked']) ? max(0, (int) $body['refinement_asked']) : 0;
+
+        $deepseek = self::call_deepseek($system, $messages);
+        if (!empty($deepseek['ok']) && isset($deepseek['parsed']) && is_array($deepseek['parsed'])) {
+            if (!empty($deepseek['parsed']['collected_delta'])) {
+                $collected = array_merge($collected, self::scrub_ai_insulation_guess($deepseek['parsed']['collected_delta']));
+                $collected = Topinstal_Lead_Widget_Defaults::sanitize_collected($collected);
+            }
+            return self::build_chat_response($collected, $deepseek['parsed'], $refinement_asked);
+        }
+        if (!empty($deepseek['fatal'])) {
+            return new WP_Error('tilw_deepseek_contract_error', 'DeepSeek response contract error.', array('status' => 502));
+        }
+
         $api_key = Topinstal_Lead_Widget_Plugin::get_option('anthropic_api_key', '');
         if ($api_key === '') {
             return self::fallback_without_ai($collected, $messages);
         }
 
         $model = Topinstal_Lead_Widget_Plugin::get_option('anthropic_model', 'claude-sonnet-4-20250514');
-        $system = self::build_system_prompt($collected);
         $anthropic_messages = self::normalize_messages_for_anthropic($messages);
 
         $payload = array(
@@ -104,9 +118,136 @@ final class Topinstal_Lead_Widget_Chat {
             $collected = Topinstal_Lead_Widget_Defaults::sanitize_collected($collected);
         }
 
-        $refinement_asked = isset($body['refinement_asked']) ? max(0, (int) $body['refinement_asked']) : 0;
-
         return self::build_chat_response($collected, $parsed, $refinement_asked);
+    }
+
+    /**
+     * @param string $system
+     * @param array<int,mixed> $messages
+     * @return array<string,mixed>
+     */
+    private static function call_deepseek($system, $messages) {
+        $api_key = Topinstal_Lead_Widget_Plugin::get_option('deepseek_api_key', '');
+        if ($api_key === '') {
+            return array('ok' => false, 'fatal' => false, 'error' => 'not_configured');
+        }
+
+        $model = Topinstal_Lead_Widget_Plugin::get_option('deepseek_model', 'deepseek-v4-flash');
+        $base_url = rtrim(Topinstal_Lead_Widget_Plugin::get_option('deepseek_base_url', 'https://api.deepseek.com'), '/');
+        if ($base_url === '') {
+            $base_url = 'https://api.deepseek.com';
+        }
+
+        $payload = array(
+            'model' => $model,
+            'max_tokens' => 1200,
+            'messages' => array_merge(
+                array(array('role' => 'system', 'content' => self::build_deepseek_system_prompt($system))),
+                self::normalize_messages_for_openai($messages)
+            ),
+        );
+
+        if (self::option_enabled('deepseek_thinking_enabled', true)) {
+            $payload['thinking'] = array('type' => 'enabled');
+            $payload['reasoning_effort'] = Topinstal_Lead_Widget_Plugin::get_option('deepseek_reasoning_effort', 'low');
+        } else {
+            $payload['temperature'] = 0.2;
+        }
+
+        $response = wp_remote_post(
+            $base_url . '/chat/completions',
+            array(
+                'timeout' => 30,
+                'headers' => array(
+                    'Content-Type' => 'application/json',
+                    'Authorization' => 'Bearer ' . $api_key,
+                ),
+                'body' => wp_json_encode($payload),
+            )
+        );
+
+        if (is_wp_error($response)) {
+            return array('ok' => false, 'fatal' => false, 'error' => 'transport_error');
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $raw = (string) wp_remote_retrieve_body($response);
+        $decoded = json_decode($raw, true);
+
+        if ($code < 200 || $code >= 300) {
+            return array('ok' => false, 'fatal' => false, 'error' => 'http_error', 'status' => $code);
+        }
+
+        if (!is_array($decoded)) {
+            return array('ok' => false, 'fatal' => true, 'error' => 'invalid_json', 'status' => $code);
+        }
+
+        $parsed = self::parse_deepseek_response($decoded);
+        if ($parsed === null) {
+            return array('ok' => false, 'fatal' => true, 'error' => 'invalid_shape', 'status' => $code);
+        }
+
+        return array('ok' => true, 'fatal' => false, 'parsed' => $parsed, 'status' => $code);
+    }
+
+    /**
+     * @param string $system
+     * @return string
+     */
+    private static function build_deepseek_system_prompt($system) {
+        return $system . "\n\n" . implode(
+            "\n",
+            array(
+                'Return only a JSON object. Do not use markdown.',
+                'Schema: {"message": string, "done": boolean, "collected_delta": object}.',
+                'Allowed collected_delta keys: powierzchnia, on_corner, obecne_ogrzewanie, dhw_persons, dhw_usage, postal_code, ventilation_type.',
+                'Answer message must be in Polish and ask at most one next question.',
+            )
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $decoded
+     * @return array<string,mixed>|null
+     */
+    private static function parse_deepseek_response($decoded) {
+        if (
+            !isset($decoded['choices'])
+            || !is_array($decoded['choices'])
+            || !isset($decoded['choices'][0])
+            || !is_array($decoded['choices'][0])
+            || !isset($decoded['choices'][0]['message'])
+            || !is_array($decoded['choices'][0]['message'])
+            || !array_key_exists('content', $decoded['choices'][0]['message'])
+        ) {
+            return null;
+        }
+
+        $content_value = $decoded['choices'][0]['message']['content'];
+        if (is_array($content_value) || is_object($content_value)) {
+            return null;
+        }
+
+        $content = trim((string) $content_value);
+        if ($content === '') {
+            return null;
+        }
+
+        return self::parse_assistant_json($content);
+    }
+
+    /**
+     * @param string $key
+     * @param bool $default
+     * @return bool
+     */
+    private static function option_enabled($key, $default) {
+        $value = Topinstal_Lead_Widget_Plugin::get_option($key, $default ? '1' : '0');
+        $value = strtolower(trim((string) $value));
+        if ($value === '') {
+            return $default;
+        }
+        return !in_array($value, array('0', 'false', 'no', 'off'), true);
     }
 
     /**
@@ -655,6 +796,14 @@ final class Topinstal_Lead_Widget_Chat {
      * @return array<int,array<string,string>>
      */
     private static function normalize_messages_for_anthropic($messages) {
+        return self::normalize_messages_for_openai($messages);
+    }
+
+    /**
+     * @param array<int,mixed> $messages
+     * @return array<int,array<string,string>>
+     */
+    private static function normalize_messages_for_openai($messages) {
         $out = array();
         foreach ($messages as $msg) {
             if (!is_array($msg)) {

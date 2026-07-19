@@ -115,7 +115,7 @@ SMTP: mu-plugin topinstal-wp-smtp.php (credentials z cieplo-orchestrator .env)
 | `lead_email_override`         | Test: oferta klienta na ten adres                          |
 | `offer_test_mode`             | `1` = tylko operator (bez maila do klienta)                |
 | `mail_from`                   | From w mailach (domyślnie SMTP_FROM)                       |
-| `node_b_registry_url` + token | engagement gmail-agent `:8765`                             |
+| `node_b_registry_url` + token | gmail-agent Node B `:8766` (host; `:8765` if port unset)   |
 
 ### Lokalny dev (kalk-top runtime)
 
@@ -147,7 +147,9 @@ php scripts/e2e-scenarios-smoke.php --live-mail   # pełny E2E + mail operatora
 | `scripts/buffer-hydraulics-smoke.php` | HT grzejników, bufor, refinement fields      |
 | `scripts/insulation-pending-test.php` | pending questions ocieplenia                 |
 
-### Wdrożenie prod (checklist)
+### Wdrożenie prod (checklist) — **deferred**
+
+> **Firma w zawieszeniu (2026-06-17):** ten checklist jest na przyszłość. Agent **nie** wykonuje deploy prod dopóki operator nie powiadomi o wznowieniu działalności (`OPERATOR_DECISIONS` §2026-06-17).
 
 1. Skopiuj / zsynchronizuj `wp-content/plugins/topinstal-lead-widget/` na prod WP
 2. Aktywuj plugin + **kalk-top** + **top-instal-generator** na tej samej WP (lub ustaw `generator_url` na zewnętrzną instancję)

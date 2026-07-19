@@ -32,7 +32,7 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             return array('delivered' => false, 'error' => 'generator_not_configured');
         }
 
-        $pdf = self::generate_pdf($generator_base, $offer, $trace_id);
+        $pdf = self::generate_pdf($generator_base, $offer, $trace_id, $session_id);
         if (is_wp_error($pdf)) {
             error_log('[topinstal-lead-widget] offer dispatch: ' . $pdf->get_error_message());
             $engagement_id = Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id);
@@ -109,9 +109,10 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
      * @param string $trace_id
      * @return array{download_url:string,filename:string,bytes:string}|WP_Error
      */
-    private static function generate_pdf($generator_base, $offer, $trace_id) {
+    private static function generate_pdf($generator_base, $offer, $trace_id, $session_id = '') {
         $url = $generator_base . '/wp-json/topinstal/v1/offer-documents/generate';
-        $body = self::build_generator_request($offer, $trace_id);
+        $engagement_id = $session_id !== '' ? Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id) : '';
+        $body = self::build_generator_request($offer, $trace_id, $engagement_id);
         $headers = array(
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
@@ -176,7 +177,7 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
      * @param string $trace_id
      * @return array<string,mixed>
      */
-    private static function build_generator_request($offer, $trace_id) {
+    private static function build_generator_request($offer, $trace_id, $engagement_id = '') {
         $payload = array();
         $engineering = isset($offer['engineering']) && is_array($offer['engineering']) ? $offer['engineering'] : array();
         $cwu = isset($engineering['cwu']) && is_array($engineering['cwu']) ? $engineering['cwu'] : array();
@@ -204,6 +205,7 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
         return array(
             'schemaVersion' => '1.0',
             'traceId' => $trace_id,
+            'engagementId' => trim((string) $engagement_id),
             'mode' => 'from-offer-dto',
             'documentType' => 'offer_document',
             'outputFormat' => 'pdf',

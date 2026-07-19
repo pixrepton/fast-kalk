@@ -244,6 +244,11 @@ final class Topinstal_Lead_Widget_Plugin {
      */
     public static function register_settings() {
         $fields = array(
+            'deepseek_api_key',
+            'deepseek_model',
+            'deepseek_base_url',
+            'deepseek_thinking_enabled',
+            'deepseek_reasoning_effort',
             'anthropic_api_key',
             'anthropic_model',
             'calc_agent_api_key',
@@ -306,6 +311,29 @@ final class Topinstal_Lead_Widget_Plugin {
             <form method="post" action="options.php">
                 <?php settings_fields(self::OPTION_GROUP); ?>
                 <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="deepseek_api_key">DeepSeek API Key</label></th>
+                        <td><input type="password" class="regular-text" id="deepseek_api_key" name="topinstal_lead_widget_deepseek_api_key" value="<?php echo esc_attr(self::get_option('deepseek_api_key')); ?>" autocomplete="off" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="deepseek_model">DeepSeek model</label></th>
+                        <td><input type="text" class="regular-text" id="deepseek_model" name="topinstal_lead_widget_deepseek_model" value="<?php echo esc_attr(self::get_option('deepseek_model', 'deepseek-v4-flash')); ?>" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="deepseek_base_url">DeepSeek base URL</label></th>
+                        <td><input type="url" class="large-text" id="deepseek_base_url" name="topinstal_lead_widget_deepseek_base_url" value="<?php echo esc_attr(self::get_option('deepseek_base_url', 'https://api.deepseek.com')); ?>" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="deepseek_thinking_enabled">DeepSeek thinking</label></th>
+                        <td>
+                            <input type="hidden" name="topinstal_lead_widget_deepseek_thinking_enabled" value="0" />
+                            <label><input type="checkbox" id="deepseek_thinking_enabled" name="topinstal_lead_widget_deepseek_thinking_enabled" value="1" <?php checked(self::get_option('deepseek_thinking_enabled', '1'), '1'); ?> /> Enabled</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="deepseek_reasoning_effort">DeepSeek reasoning effort</label></th>
+                        <td><input type="text" class="regular-text" id="deepseek_reasoning_effort" name="topinstal_lead_widget_deepseek_reasoning_effort" value="<?php echo esc_attr(self::get_option('deepseek_reasoning_effort', 'low')); ?>" /></td>
+                    </tr>
                     <tr>
                         <th scope="row"><label for="anthropic_api_key">Anthropic API Key</label></th>
                         <td><input type="password" class="regular-text" id="anthropic_api_key" name="topinstal_lead_widget_anthropic_api_key" value="<?php echo esc_attr(self::get_option('anthropic_api_key')); ?>" autocomplete="off" /></td>
@@ -385,9 +413,27 @@ final class Topinstal_Lead_Widget_Plugin {
      */
     public static function get_option($key, $default = '') {
         $const_map = array(
-            'calc_agent_api_key' => 'TOPINSTAL_CALC_AGENT_API_KEY',
-            'node_b_registry_token' => 'NODE_B_REGISTRY_TOKEN',
+            'deepseek_api_key' => 'DEEPSEEK_API_KEY',
+            'deepseek_model' => 'DEEPSEEK_MODEL',
+            'deepseek_base_url' => 'DEEPSEEK_BASE_URL',
+            'deepseek_thinking_enabled' => 'DEEPSEEK_THINKING_ENABLED',
+            'deepseek_reasoning_effort' => 'DEEPSEEK_REASONING_EFFORT',
             'anthropic_api_key' => 'ANTHROPIC_API_KEY',
+            'calc_agent_api_key' => 'TOPINSTAL_CALC_AGENT_API_KEY',
+            'calc_rest_url' => 'TOPINSTAL_CALC_REST_URL',
+            'node_b_registry_url' => 'NODE_B_REGISTRY_BASE_URL',
+            'node_b_registry_token' => 'NODE_B_REGISTRY_TOKEN',
+            'generator_url' => 'TOPINSTAL_GENERATOR_URL',
+            'generator_agent_key' => 'TOPINSTAL_GENERATOR_AGENT_KEY',
+            'operator_email' => 'TOPINSTAL_OPERATOR_EMAIL',
+            'lead_email_override' => 'TOPINSTAL_LEAD_EMAIL_OVERRIDE',
+            'offer_test_mode' => 'TOPINSTAL_OFFER_TEST_MODE',
+            'mail_from' => 'TOPINSTAL_MAIL_FROM',
+            'smtp_host' => 'SMTP_HOST',
+            'smtp_port' => 'SMTP_PORT',
+            'smtp_username' => 'SMTP_USERNAME',
+            'smtp_password' => 'SMTP_PASSWORD',
+            'smtp_secure' => 'SMTP_SECURE',
         );
         if (isset($const_map[$key]) && defined($const_map[$key])) {
             $from_const = constant($const_map[$key]);

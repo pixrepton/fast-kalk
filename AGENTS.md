@@ -38,6 +38,8 @@ fast-kalk: php scripts/configure-local.php
 
 ## Handover
 
-Ostatni stan: [`memory-bank/agent-handover.md`](memory-bank/agent-handover.md)
+Ostatni stan: `../knowledge/memory/ACTIVE_WORKSPACE.md`
 
-Pełne instrukcje workspace: [`../AGENTS.md`](../AGENTS.md) · [`PROJECT_README.md`](PROJECT_README.md)
+**Prod deploy:** deferred — firma w zawieszeniu (2026-06-17). Lokalny proof = `e2e-scenarios-smoke.php` @8091.
+
+Pełne instrukcje workspace: [`../AGENTS.md`](../AGENTS.md)
