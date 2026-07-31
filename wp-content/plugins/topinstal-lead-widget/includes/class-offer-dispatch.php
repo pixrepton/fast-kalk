@@ -107,7 +107,7 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
      * @param string $generator_base
      * @param array<string,mixed> $offer
      * @param string $trace_id
-     * @return array{download_url:string,filename:string,bytes:string}|WP_Error
+     * @return array{download_url:string,filename:string,bytes:string,format:string,readiness_status:string}|WP_Error
      */
     private static function generate_pdf($generator_base, $offer, $trace_id, $session_id = '') {
         $url = $generator_base . '/wp-json/topinstal/v1/offer-documents/generate';
@@ -148,12 +148,12 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             }
         }
 
-        $document = isset($decoded['document']) && is_array($decoded['document']) ? $decoded['document'] : array();
-        $download_url = isset($document['downloadUrl']) ? (string) $document['downloadUrl'] : '';
-        $filename = isset($document['filename']) ? (string) $document['filename'] : 'oferta-pompy-ciepla.pdf';
-        if ($download_url === '') {
-            return new WP_Error('generator_no_url', 'Generator response missing downloadUrl.');
+        $resolved = self::resolve_pdf_document($decoded);
+        if (is_wp_error($resolved)) {
+            return $resolved;
         }
+        $download_url = (string) $resolved['download_url'];
+        $filename = (string) $resolved['filename'];
 
         $pdf_response = wp_remote_get($download_url, array('timeout' => 60));
         if (is_wp_error($pdf_response)) {
@@ -169,6 +169,8 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             'download_url' => $download_url,
             'filename' => $filename,
             'bytes' => $pdf_bytes,
+            'format' => (string) $resolved['format'],
+            'readiness_status' => (string) $resolved['readiness_status'],
         );
     }
 
@@ -452,6 +454,101 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
 
         $decoded = $response->get_data();
         return is_array($decoded) ? $decoded : new WP_Error('generator_internal_parse', 'Invalid generator response.');
+    }
+
+    /**
+     * @param array<string,mixed> $decoded
+     * @return array{download_url:string,filename:string,format:string,readiness_status:string}|WP_Error
+     */
+    private static function resolve_pdf_document($decoded) {
+        if (!is_array($decoded)) {
+            return new WP_Error('generator_invalid_response', 'Generator response must be an object.');
+        }
+        $document = isset($decoded['document']) && is_array($decoded['document']) ? $decoded['document'] : array();
+        $readiness = self::infer_document_readiness($decoded, $document);
+        $download_url = isset($document['downloadUrl']) ? (string) $document['downloadUrl'] : '';
+        $filename = isset($document['filename']) ? (string) $document['filename'] : 'oferta-pompy-ciepla.pdf';
+
+        if ($readiness['status'] !== 'READY') {
+            return new WP_Error(
+                'generator_pdf_degraded',
+                'Generator did not return a verified PDF artifact.',
+                array(
+                    'status' => 409,
+                    'readiness_status' => $readiness['status'],
+                    'requested_format' => $readiness['requested_format'],
+                    'actual_format' => $readiness['actual_format'],
+                    'degraded_code' => $readiness['degraded_code'],
+                )
+            );
+        }
+        if ($readiness['actual_format'] !== 'pdf') {
+            return new WP_Error(
+                'generator_unexpected_format',
+                'Generator returned non-PDF document for PDF-required workflow.',
+                array(
+                    'status' => 409,
+                    'actual_format' => $readiness['actual_format'],
+                )
+            );
+        }
+        if ($download_url === '') {
+            return new WP_Error('generator_no_url', 'Generator response missing downloadUrl.');
+        }
+        if (empty($readiness['artifact_verified'])) {
+            return new WP_Error('generator_pdf_unverified', 'Generator PDF artifact is not verified.');
+        }
+
+        return array(
+            'download_url' => $download_url,
+            'filename' => $filename,
+            'format' => $readiness['actual_format'],
+            'readiness_status' => $readiness['status'],
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $decoded
+     * @param array<string,mixed> $document
+     * @return array{status:string,requested_format:string,actual_format:string,artifact_verified:bool,degraded_code:string}
+     */
+    private static function infer_document_readiness($decoded, $document) {
+        $readiness = isset($decoded['readiness']) && is_array($decoded['readiness']) ? $decoded['readiness'] : array();
+        $requested_format = isset($readiness['requestedFormat'])
+            ? strtolower((string) $readiness['requestedFormat'])
+            : 'pdf';
+        $actual_format = isset($readiness['actualFormat'])
+            ? strtolower((string) $readiness['actualFormat'])
+            : strtolower((string) ($document['format'] ?? ''));
+        if ($actual_format === '') {
+            $actual_format = 'pdf';
+        }
+        $has_explicit_artifact_verification = array_key_exists('artifactVerified', $readiness)
+            || array_key_exists('verified', $document);
+        $artifact_verified = array_key_exists('artifactVerified', $readiness)
+            ? !empty($readiness['artifactVerified'])
+            : !empty($document['verified']);
+        if (
+            !$has_explicit_artifact_verification
+            && !$artifact_verified
+            && !empty($document['downloadUrl'])
+            && $actual_format === 'pdf'
+        ) {
+            $artifact_verified = true;
+        }
+        $status = isset($readiness['status']) ? strtoupper((string) $readiness['status']) : '';
+        if ($status === '') {
+            $status = ($requested_format === 'pdf' && $actual_format !== 'pdf') ? 'DEGRADED' : 'READY';
+        }
+        $degraded_code = isset($readiness['degradedCode']) ? (string) $readiness['degradedCode'] : '';
+
+        return array(
+            'status' => $status,
+            'requested_format' => $requested_format,
+            'actual_format' => $actual_format,
+            'artifact_verified' => (bool) $artifact_verified,
+            'degraded_code' => $degraded_code,
+        );
     }
 
     /**
