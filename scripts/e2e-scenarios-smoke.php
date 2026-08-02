@@ -237,29 +237,36 @@ if (is_wp_error($dispatchSummary)) {
         $health = wp_remote_get($genBase . '/wp-json/', array('timeout' => 10));
         assert_true(!is_wp_error($health) && (int) wp_remote_retrieve_response_code($health) === 200, 'generator base reachable');
 
-        if ($liveMail) {
-            $reg = run_register($dispatchCollected, $dispatchSummary);
-            if (is_wp_error($reg)) {
-                assert_true(false, 'register — ' . $reg->get_error_message());
-            } else {
-                $delivered = !empty($reg['offer_delivered']);
-                assert_true($delivered, 'register offer_delivered=true (check konradswierad@gmail.com)');
-                if ($delivered) {
-                    echo '  pdf_url: ' . ($reg['offer_pdf_url'] ?? '(none)') . "\n";
-                }
-            }
+        // The production journey is lead -> calculate -> register -> dispatch. The
+        // register step used to run only under --live-mail, so the default run
+        // bypassed it by calling Offer_Dispatch directly and never proved that the
+        // REST entrypoint reaches dispatch at all. Both branches converge on the
+        // same maybe_dispatch(), so exercising the real entrypoint here adds
+        // coverage without adding a new class of side effect.
+        $reg = run_register($dispatchCollected, $dispatchSummary);
+        if (is_wp_error($reg)) {
+            assert_true(false, 'register — ' . $reg->get_error_message());
         } else {
-            $dispatch = Topinstal_Lead_Widget_Offer_Dispatch::maybe_dispatch(
-                $dispatchCollected,
-                (string) $dispatchCollected['session_id'],
-                isset($dispatchSummary['traceId']) ? (string) $dispatchSummary['traceId'] : ''
-            );
-            assert_true(!empty($dispatch['delivered']), 'dry dispatch delivered (PDF generated, mail skipped dry)');
-            if (!empty($dispatch['pdf_url'])) {
-                echo '  pdf_url: ' . $dispatch['pdf_url'] . "\n";
+            assert_true(is_array($reg), 'register accepted the lead');
+            assert_true(array_key_exists('offer_delivered', $reg), 'register reported an offer dispatch outcome');
+            $delivered = !empty($reg['offer_delivered']);
+            if ($liveMail) {
+                assert_true($delivered, 'register offer_delivered=true (check konradswierad@gmail.com)');
+            } else {
+                assert_true($delivered, 'lead-to-dispatch journey completed through /register');
             }
-            if (!empty($dispatch['error'])) {
-                echo '  dispatch error: ' . $dispatch['error'] . "\n";
+            $regPdf = '';
+            if (!empty($reg['pdf_url'])) {
+                $regPdf = (string) $reg['pdf_url'];
+            } elseif (!empty($reg['offer_pdf_url'])) {
+                $regPdf = (string) $reg['offer_pdf_url'];
+            }
+            assert_true($regPdf !== '', 'register returned an offer PDF url');
+            if ($regPdf !== '') {
+                echo '  pdf_url: ' . $regPdf . "\n";
+            }
+            if (!empty($reg['offer_error'])) {
+                echo '  dispatch error: ' . $reg['offer_error'] . "\n";
             }
         }
     }
