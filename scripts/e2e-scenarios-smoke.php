@@ -15,6 +15,24 @@ $fail = 0;
 $passed = 0;
 
 /**
+ * Smoke runs many calculate/register calls. Clear lead-widget rate-limit buckets
+ * when offer_test_mode is on so a second Gate B run is not blocked by the first.
+ *
+ * @return void
+ */
+function clear_smoke_rate_limits() {
+    $testMode = (string) Topinstal_Lead_Widget_Plugin::get_option('offer_test_mode', '0');
+    if ($testMode !== '1') {
+        return;
+    }
+    foreach (array('0.0.0.0', '127.0.0.1', '::1') as $ip) {
+        delete_transient('tilw_rate_' . md5($ip));
+    }
+}
+
+clear_smoke_rate_limits();
+
+/**
  * @param bool $ok
  * @param string $label
  * @return void
@@ -235,7 +253,14 @@ if (is_wp_error($dispatchSummary)) {
         assert_true(false, 'generator_url not configured — run configure-local.php');
     } else {
         $health = wp_remote_get($genBase . '/wp-json/', array('timeout' => 10));
-        assert_true(!is_wp_error($health) && (int) wp_remote_retrieve_response_code($health) === 200, 'generator base reachable');
+        $healthOk = !is_wp_error($health) && (int) wp_remote_retrieve_response_code($health) === 200;
+        assert_true($healthOk, 'generator base reachable');
+        if (!$healthOk) {
+            echo "HINT: kalk-top runtime-wp not reachable at {$genBase}. Run:\n";
+            echo "  kalk-top\\scripts\\start-runtime-wp.ps1\n";
+            echo "  php scripts/configure-local.php\n";
+            echo "Or: powershell -File scripts/preflight-local-stack.ps1 -FullStack\n";
+        }
 
         // The production journey is lead -> calculate -> register -> dispatch. The
         // register step used to run only under --live-mail, so the default run
