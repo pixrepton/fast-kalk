@@ -79,6 +79,11 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
         }
 
         $engagement_id = Topinstal_Lead_Widget_Session_Store::get_engagement_id($session_id);
+        $pdf_url = isset($pdf['download_url']) ? (string) $pdf['download_url'] : '';
+        $document_id = isset($pdf['document_id']) ? (string) $pdf['document_id'] : '';
+        if ($document_id === '' && $pdf_url !== '') {
+            $document_id = $pdf_url;
+        }
         Topinstal_Lead_Widget_Os_Event_Client::emit(
             'fastkalk.offer.delivered',
             'Lead widget: oferta PDF dostarczona operatorem',
@@ -88,16 +93,27 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
                 'trace_id' => $trace_id,
                 'operator_sent' => !empty($mail['operator_sent']),
                 'client_sent' => !empty($mail['client_sent']),
+                'pdf_url' => $pdf_url,
+                'document_id' => $document_id,
+                'format' => isset($pdf['format']) ? (string) $pdf['format'] : 'pdf',
             ),
             array(
                 'trace_id' => $trace_id,
                 'session_id' => $session_id,
             )
         );
+        self::register_offer_snapshot_link(
+            $session_id,
+            $trace_id,
+            $engagement_id,
+            $pdf_url,
+            $document_id,
+            isset($pdf['format']) ? (string) $pdf['format'] : 'pdf'
+        );
 
         return array(
             'delivered' => true,
-            'pdf_url' => isset($pdf['download_url']) ? (string) $pdf['download_url'] : '',
+            'pdf_url' => $pdf_url,
             'operator_sent' => !empty($mail['operator_sent']),
             'client_sent' => !empty($mail['client_sent']),
         );
@@ -171,7 +187,92 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             'bytes' => $pdf_bytes,
             'format' => (string) $resolved['format'],
             'readiness_status' => (string) $resolved['readiness_status'],
+            'document_id' => isset($resolved['document_id']) ? (string) $resolved['document_id'] : '',
         );
+    }
+
+    /**
+     * Best-effort correlation link: offer_snapshot → PDF/artifact ref on existing engagement.
+     *
+     * @param string $session_id
+     * @param string $trace_id
+     * @param string $engagement_id
+     * @param string $pdf_url
+     * @param string $document_id
+     * @param string $format
+     * @return void
+     */
+    private static function register_offer_snapshot_link(
+        $session_id,
+        $trace_id,
+        $engagement_id,
+        $pdf_url,
+        $document_id,
+        $format
+    ) {
+        $target = trim((string) $document_id);
+        if ($target === '') {
+            $target = trim((string) $pdf_url);
+        }
+        if ($target === '' || trim((string) $engagement_id) === '') {
+            return;
+        }
+
+        $base = rtrim(Topinstal_Lead_Widget_Plugin::get_option('node_b_registry_url', 'http://127.0.0.1:8766'), '/');
+        if ($base === '') {
+            return;
+        }
+
+        $email = Topinstal_Lead_Widget_Session_Store::get_registry_email($session_id);
+        $payload = array(
+            'identity_email' => $email,
+            'links' => array(
+                array(
+                    'link_type' => 'offer_snapshot',
+                    'target_id' => $target,
+                    'source_repo' => 'topinstal-lead-widget',
+                    'confidence' => 1.0,
+                    'metadata' => array(
+                        'pdf_url' => (string) $pdf_url,
+                        'document_id' => (string) $document_id,
+                        'format' => (string) $format,
+                        'session_id' => (string) $session_id,
+                        'trace_id' => (string) $trace_id,
+                        'engagement_id' => (string) $engagement_id,
+                    ),
+                ),
+            ),
+        );
+        if ($trace_id !== '') {
+            $payload['links'][] = array(
+                'link_type' => 'canonical_trace',
+                'target_id' => (string) $trace_id,
+                'source_repo' => 'topinstal-lead-widget',
+                'confidence' => 1.0,
+            );
+        }
+
+        $headers = array(
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        );
+        $token = Topinstal_Lead_Widget_Plugin::get_option('node_b_registry_token', '');
+        if ($token !== '') {
+            $headers['Authorization'] = 'Bearer ' . $token;
+        }
+
+        $response = wp_remote_post(
+            $base . '/internal/registry/links',
+            array(
+                'timeout' => 5,
+                'blocking' => true,
+                'headers' => $headers,
+                'body' => wp_json_encode($payload),
+            )
+        );
+        if (is_wp_error($response)) {
+            error_log('[topinstal-lead-widget] offer_snapshot registry: ' . $response->get_error_message());
+        }
     }
 
     /**
@@ -504,6 +605,9 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             'filename' => $filename,
             'format' => $readiness['actual_format'],
             'readiness_status' => $readiness['status'],
+            'document_id' => isset($document['id'])
+                ? (string) $document['id']
+                : (isset($document['documentId']) ? (string) $document['documentId'] : ''),
         );
     }
 
