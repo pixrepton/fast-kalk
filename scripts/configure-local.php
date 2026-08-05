@@ -144,6 +144,7 @@ if (!is_dir($pluginTarget) && !is_link($pluginTarget)) {
 echo "Linked lead widget plugin: {$pluginTarget}\n";
 
 require $repoRoot . '/scripts/_wp-bootstrap.php';
+require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 $agentKey = isset($env['KALKTOP_AGENT_KEY']) ? trim($env['KALKTOP_AGENT_KEY']) : '';
 if ($agentKey === '' && isset($env['GENERATOR_AGENT_KEY'])) {
@@ -199,6 +200,10 @@ update_option('topinstal_lead_widget_node_b_registry_token', $nodeBToken);
 update_option('topinstal_node_b_registry_base_url', $nodeBBase);
 update_option('topinstal_node_b_registry_token', $nodeBToken);
 
+if (!is_plugin_active('topinstal-lead-widget/topinstal-lead-widget.php')) {
+    activate_plugin('topinstal-lead-widget/topinstal-lead-widget.php');
+}
+
 echo "Configured WP options:\n";
 echo "  operator_email=konradswierad@gmail.com\n";
 echo "  generator_url={$generatorBase}\n";
@@ -207,4 +212,5 @@ echo "  agent_key=" . ($agentKey !== '' ? '[set]' : '[empty]') . "\n";
 echo "  offer_test_mode=1\n";
 echo "  node_b_registry_url={$nodeBBase}\n";
 echo "  node_b_registry_token=" . ($nodeBToken !== '' ? '[set]' : '[empty]') . "\n";
+echo '  lead_widget_active=' . (is_plugin_active('topinstal-lead-widget/topinstal-lead-widget.php') ? '1' : '0') . "\n";
 echo "CONFIGURE OK\n";
