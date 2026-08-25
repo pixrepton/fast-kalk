@@ -5,6 +5,9 @@
   var NONCE = '';
   var PDF_URL = '';
   var CTA_URL = '';
+  var PUBLIC_SYSTEM_ERROR =
+    'Nie udało się przygotować wyniku. Spróbuj ponownie za chwilę.';
+  var PUBLIC_CHAT_ERROR = 'Wystąpił chwilowy problem. Spróbuj ponownie.';
 
   function sanitizeAsciiValue(value) {
     return String(value || '')
@@ -43,7 +46,6 @@
     { value: 'wolnostojacy', label: 'Dom wolnostojący' },
     { value: 'blizniak', label: 'Bliźniak' },
     { value: 'szeregowiec', label: 'Szeregowiec' },
-    { value: 'inny', label: 'Wielorodzinny' },
   ];
 
   var STANDARD_OPTIONS = [
@@ -87,6 +89,10 @@
       { value: 'prad', label: 'Prąd' },
       { value: 'inne', label: 'Inne' },
     ],
+    keep_existing_heat_source: [
+      { value: 'tak', label: 'Tak' },
+      { value: 'nie', label: 'Nie' },
+    ],
     on_corner: [
       { value: 'tak', label: 'Tak' },
       { value: 'nie', label: 'Nie' },
@@ -119,14 +125,12 @@
     return chips;
   }
 
-  var STEP_TOTAL = 5;
+  var STEP_TOTAL = 3;
 
   var STEP_META = [
     { num: '01', label: 'Parametry budynku' },
     { num: '02', label: 'Doprecyzowanie' },
-    { num: '03', label: 'Wstępny wynik' },
-    { num: '04', label: 'Doprecyzowanie instalacji' },
-    { num: '05', label: 'Wynik po doprecyzowaniu' },
+    { num: '03', label: 'Twój wynik' },
   ];
 
   var PRE_RESULT_REQUIRED_FIELDS = {
@@ -139,8 +143,50 @@
     dhw_usage: true,
     ventilation_type: true,
     obecne_ogrzewanie: true,
+    keep_existing_heat_source: true,
     on_corner: true,
   };
+
+  function displayStepNumber(step) {
+    return Math.max(1, Math.min(STEP_TOTAL, step || 1));
+  }
+
+  function publicMessageForApiFailure(path) {
+    return path === '/chat' ? PUBLIC_CHAT_ERROR : PUBLIC_SYSTEM_ERROR;
+  }
+
+  function createPublicApiError(path, status, payload, technicalMessage) {
+    var err = new Error(publicMessageForApiFailure(path));
+    err.status = status;
+    err.payload = payload || null;
+    err.publicMessage = publicMessageForApiFailure(path);
+    err.technicalMessage = technicalMessage || '';
+    err.isSystemError = true;
+    return err;
+  }
+
+  function logApiFailure(path, status, payload, technicalMessage) {
+    if (typeof console === 'undefined' || !console.error) {
+      return;
+    }
+    console.error('[fast-kalk] REST request failed', {
+      path: path,
+      status: status,
+      payload: payload || null,
+      technicalMessage: technicalMessage || '',
+    });
+  }
+
+  function exposeTestHooks() {
+    if (typeof window !== 'undefined' && window.TopinstalLeadWidgetExposeTestHooks) {
+      window.TopinstalLeadWidgetTestHooks = {
+        publicMessageForApiFailure: publicMessageForApiFailure,
+        createPublicApiError: createPublicApiError,
+        stepTotal: STEP_TOTAL,
+        stepMeta: STEP_META,
+      };
+    }
+  }
 
   function wrapStepPanel(inner) {
     var panel = document.createElement('div');
@@ -165,7 +211,14 @@
     var url = sanitizeAsciiValue(REST_BASE + path);
     var nonce = sanitizeAsciiValue(NONCE);
     if (!url || !nonce) {
-      return Promise.reject(new Error('Brak konfiguracji REST. Odśwież stronę lub wyczyść cache.'));
+      var configErr = createPublicApiError(
+        path,
+        0,
+        null,
+        'Missing REST base or nonce in widget configuration.'
+      );
+      logApiFailure(path, 0, null, configErr.technicalMessage);
+      return Promise.reject(configErr);
     }
     var headers = new Headers();
     headers.set('Content-Type', 'application/json');
@@ -183,17 +236,17 @@
           try {
             data = JSON.parse(raw);
           } catch (parseErr) {
-            var badJson = new Error('Nieprawidłowa odpowiedź serwera (JSON).');
-            badJson.status = res.status;
+            var badJson = createPublicApiError(path, res.status, null, 'Invalid JSON response.');
+            logApiFailure(path, res.status, null, badJson.technicalMessage);
             throw badJson;
           }
         }
         if (!res.ok) {
-          var fail = new Error(
-            (data && (data.message || data.code)) || 'Request failed (' + res.status + ')'
-          );
-          fail.status = res.status;
-          fail.payload = data;
+          var technicalMessage =
+            (data && (data.message || data.error || data.code)) ||
+            'Request failed (' + res.status + ')';
+          var fail = createPublicApiError(path, res.status, data, technicalMessage);
+          logApiFailure(path, res.status, data, technicalMessage);
           throw fail;
         }
         return data || {};
@@ -635,7 +688,7 @@
     track.className = 'tilw-progress-track';
     var fill = document.createElement('div');
     fill.className = 'tilw-progress-fill';
-    fill.style.width = Math.round((this.step / STEP_TOTAL) * 100) + '%';
+    fill.style.width = Math.round((displayStepNumber(this.step) / STEP_TOTAL) * 100) + '%';
     track.appendChild(fill);
     progress.appendChild(track);
     card.appendChild(progress);
@@ -643,7 +696,7 @@
     var body = document.createElement('div');
     body.className = 'tilw-body';
 
-    var stepMeta = STEP_META[this.step - 1];
+    var stepMeta = STEP_META[displayStepNumber(this.step) - 1];
     var stepLbl = document.createElement('p');
     stepLbl.className = 'tilw-step-lbl';
     stepLbl.innerHTML = '<span>' + stepMeta.num + '</span> — ' + stepMeta.label;
@@ -962,7 +1015,7 @@
     var sc = document.createElement('span');
     sc.className = 'tilw-sc';
     sc.textContent =
-      self.padStepNum(self.step) + ' / ' + self.padStepNum(STEP_TOTAL);
+      self.padStepNum(displayStepNumber(self.step)) + ' / ' + self.padStepNum(STEP_TOTAL);
     nav.appendChild(back);
     nav.appendChild(sc);
     frag.appendChild(nav);
@@ -1107,16 +1160,15 @@
       })
       .catch(function (err) {
         self.chatLoading = false;
-        self.showError(self.formatApiError(err, 'Nie udało się uruchomić czatu. Sprawdź połączenie i odśwież stronę.'));
+        self.showError(self.formatApiError(err, PUBLIC_CHAT_ERROR));
       });
   };
 
   Widget.prototype.formatApiError = function (err, fallback) {
-    var msg = (err && err.message) || '';
-    if (/65279|ByteString|FEFF/i.test(msg)) {
-      return 'Błąd konfiguracji (nieprawidłowy token). Wgraj wtyczkę v0.3.6+ i wyczyść cache WP/Elementor.';
+    if (err && err.publicMessage) {
+      return err.publicMessage;
     }
-    return msg || fallback;
+    return fallback || PUBLIC_SYSTEM_ERROR;
   };
 
   Widget.prototype.goToCalculate = function () {
@@ -1126,8 +1178,7 @@
     }
     this.calculating = true;
     this.clearChatIdle();
-    var resultStep = this.refinementComplete && this.result ? 5 : 3;
-    this.setStep(resultStep);
+    this.setStep(3);
     this.showLoading();
 
     if (this.refinementComplete) {
@@ -1173,17 +1224,14 @@
       })
       .catch(function (err) {
         self.calculating = false;
-        self.showError(self.formatApiError(err, 'Nie udało się policzyć wstępnego doboru.'));
+        self.showError(self.formatApiError(err, PUBLIC_SYSTEM_ERROR));
       });
   };
 
   Widget.prototype.showLoading = function () {
     var body = this.root.querySelector('.tilw-body');
     if (!body) return;
-    var msg =
-      this.step === 5
-        ? 'Aktualizuję dobór po doprecyzowaniu…'
-        : 'Przygotowuję wstępny dobór…';
+    var msg = 'Przygotowuję Twój wynik…';
     body.innerHTML =
       '<div class="tilw-state"><div class="tilw-spinner"></div>' + msg + '</div>';
   };
@@ -1191,12 +1239,21 @@
   Widget.prototype.showError = function (msg) {
     var body = this.root.querySelector('.tilw-body');
     if (!body) return;
-    body.innerHTML =
-      '<div class="tilw-state tilw-error">' +
-      msg +
-      '</div><div class="tilw-actions"><button type="button" class="tilw-btn tilw-btn-ghost tilw-retry">Spróbuj ponownie</button></div>';
+    body.innerHTML = '';
+    var error = document.createElement('div');
+    error.className = 'tilw-state tilw-error';
+    error.textContent = msg;
+    var actions = document.createElement('div');
+    actions.className = 'tilw-actions';
+    var retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'tilw-btn tilw-btn-ghost tilw-retry';
+    retry.textContent = 'Spróbuj ponownie';
+    actions.appendChild(retry);
+    body.appendChild(error);
+    body.appendChild(actions);
     var self = this;
-    body.querySelector('.tilw-retry').addEventListener('click', function () {
+    retry.addEventListener('click', function () {
       if (self.isChatStep() && !self.chatDone) {
         self.requestChat();
       } else {
@@ -1259,7 +1316,7 @@
     if (stepLbl) {
       body.appendChild(stepLbl);
     } else {
-      var stepMeta = STEP_META[this.step - 1] || STEP_META[2];
+      var stepMeta = STEP_META[displayStepNumber(this.step) - 1] || STEP_META[2];
       stepLbl = document.createElement('p');
       stepLbl.className = 'tilw-step-lbl';
       stepLbl.innerHTML = '<span>' + stepMeta.num + '</span> — ' + stepMeta.label;
@@ -1352,7 +1409,7 @@
         })
         .catch(function (err) {
           emailBtn.disabled = false;
-          emailStatus.textContent = (err && err.message) || 'Błąd';
+          emailStatus.textContent = self.formatApiError(err, 'Nie udało się wysłać. Spróbuj ponownie.');
         });
     });
     emailRow.appendChild(emailInput);
@@ -1384,7 +1441,7 @@
     });
     var doneTag = document.createElement('span');
     doneTag.className = 'tilw-done-tag';
-    doneTag.textContent = self.step === 5 ? 'Wynik zaktualizowany' : 'Wynik gotowy';
+    doneTag.textContent = 'Wynik gotowy';
     nav.appendChild(back);
     nav.appendChild(doneTag);
     frag.appendChild(nav);
@@ -1400,6 +1457,7 @@
   }
 
   function boot() {
+    exposeTestHooks();
     var root = document.getElementById('topinstal-lead-widget-root');
     if (!root) {
       return;
@@ -1414,7 +1472,7 @@
     if (!REST_BASE || !NONCE) {
       root.innerHTML =
         '<div class="tilw-card"><div class="tilw-body"><p class="tilw-state tilw-error">' +
-        'Widget nie załadował skryptów. Użyj widżetu Shortcode (nie HTML) i wyczyść cache Elementora.' +
+        PUBLIC_SYSTEM_ERROR +
         '</p></div></div>';
       return;
     }

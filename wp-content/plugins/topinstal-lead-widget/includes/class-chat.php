@@ -61,7 +61,7 @@ final class Topinstal_Lead_Widget_Chat {
         $deepseek = self::call_deepseek($system, $messages);
         if (!empty($deepseek['ok']) && isset($deepseek['parsed']) && is_array($deepseek['parsed'])) {
             if (!empty($deepseek['parsed']['collected_delta'])) {
-                $collected = array_merge($collected, self::scrub_ai_insulation_guess($deepseek['parsed']['collected_delta']));
+                $collected = array_merge($collected, self::scrub_ai_collected_delta($deepseek['parsed']['collected_delta'], $collected));
                 $collected = Topinstal_Lead_Widget_Defaults::sanitize_collected($collected);
             }
             return self::build_chat_response($collected, $deepseek['parsed'], $refinement_asked);
@@ -114,7 +114,7 @@ final class Topinstal_Lead_Widget_Chat {
 
         $parsed = self::parse_anthropic_response($decoded);
         if (!empty($parsed['collected_delta'])) {
-            $collected = array_merge($collected, self::scrub_ai_insulation_guess($parsed['collected_delta']));
+            $collected = array_merge($collected, self::scrub_ai_collected_delta($parsed['collected_delta'], $collected));
             $collected = Topinstal_Lead_Widget_Defaults::sanitize_collected($collected);
         }
 
@@ -200,7 +200,8 @@ final class Topinstal_Lead_Widget_Chat {
             array(
                 'Return only a JSON object. Do not use markdown.',
                 'Schema: {"message": string, "done": boolean, "collected_delta": object}.',
-                'Allowed collected_delta keys: powierzchnia, on_corner, obecne_ogrzewanie, dhw_persons, dhw_usage, postal_code, ventilation_type.',
+                'Allowed collected_delta keys: powierzchnia, on_corner, obecne_ogrzewanie, keep_existing_heat_source, dhw_persons, dhw_usage, postal_code, ventilation_type.',
+                'Never infer keep_existing_heat_source from obecne_ogrzewanie; set it only when the current question asks whether the old heat source should remain as backup/support.',
                 'Answer message must be in Polish and ask at most one next question.',
             )
         );
@@ -289,6 +290,7 @@ final class Topinstal_Lead_Widget_Chat {
                         'type' => 'string',
                         'enum' => array('wegiel', 'gaz', 'olej', 'prad', 'inne'),
                     ),
+                    'keep_existing_heat_source' => array('type' => 'boolean'),
                     'dhw_persons' => array('type' => 'integer'),
                     'dhw_usage' => array(
                         'type' => 'string',
@@ -369,6 +371,7 @@ final class Topinstal_Lead_Widget_Chat {
             'powierzchnia',
             'on_corner',
             'obecne_ogrzewanie',
+            'keep_existing_heat_source',
             'dhw_persons',
             'dhw_usage',
             'postal_code',
@@ -570,6 +573,9 @@ final class Topinstal_Lead_Widget_Chat {
                     $collected['obecne_ogrzewanie'] = 'inne';
                 }
                 break;
+            case 'keep_existing_heat_source':
+                $collected['keep_existing_heat_source'] = self::parse_yes_no($lower);
+                break;
             case 'dhw_persons':
                 $persons = Topinstal_Lead_Widget_Defaults::normalize_dhw_persons_input($answer);
                 if ($persons >= 1) {
@@ -660,10 +666,12 @@ final class Topinstal_Lead_Widget_Chat {
      * @param array<string,mixed> $delta
      * @return array<string,mixed>
      */
-    private static function scrub_ai_insulation_guess($delta) {
+    private static function scrub_ai_collected_delta($delta, $collected) {
         if (!is_array($delta)) {
             return array();
         }
+        $pending = Topinstal_Lead_Widget_Defaults::active_pending_questions($collected);
+        $pending_field = !empty($pending[0]['field']) ? (string) $pending[0]['field'] : '';
         unset(
             $delta['insulation_level'],
             $delta['insulation_confirmed'],
@@ -671,6 +679,9 @@ final class Topinstal_Lead_Widget_Chat {
             $delta['has_underfloor_actuators'],
             $delta['hydraulics_confirmed']
         );
+        if ($pending_field !== 'keep_existing_heat_source') {
+            unset($delta['keep_existing_heat_source']);
+        }
         return $delta;
     }
 
@@ -728,6 +739,7 @@ final class Topinstal_Lead_Widget_Chat {
                     : 'Krok A już zebrany: typ budynku, rok budowy, emiter. NIE pytaj ponownie.',
                 'Z jednej odpowiedzi klienta wyciągnij pasujące pola (powierzchnia, kod, CWU, ogrzewanie, wentylacja) — NIE z pola „rok budowy”.',
                 'Ocieplenie (insulation_level) NIE wolno zgadywać z roku budowy — musi paść osobne pytanie i odpowiedź klienta (słabe/przeciętne/dobre/bardzo dobre).',
+                'Obecne ogrzewanie i decyzja o pozostawieniu starego źródła to dwa różne fakty. NIE ustawiaj keep_existing_heat_source tylko dlatego, że klient podał gaz/węgiel/olej/prąd.',
                 'Przy grzejnikach lub układzie mieszanym zapytaj o typ grzejników (stal/żeliwo vs płyty/aluminium) — to wpływa na bufor CO.',
                 'NIE ustawiaj radiators_is_ht ani has_underfloor_actuators bez wyraźnej odpowiedzi klienta.',
                 'Użyj narzędzia update_lead_parameters — ustaw rozpoznane pola naraz + message z JEDNYM następnym pytaniem (pierwsze z pending).',

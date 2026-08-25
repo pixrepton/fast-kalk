@@ -21,6 +21,7 @@ final class Topinstal_Lead_Widget_Defaults {
         'dhw_usage',
         'ventilation_type',
         'obecne_ogrzewanie',
+        'keep_existing_heat_source',
         'on_corner',
     );
 
@@ -35,6 +36,7 @@ final class Topinstal_Lead_Widget_Defaults {
         'dhw_usage' => 'zużycie ciepłej wody',
         'ventilation_type' => 'wentylacja',
         'obecne_ogrzewanie' => 'obecne ogrzewanie',
+        'keep_existing_heat_source' => 'pozostawienie obecnego źródła',
         'on_corner' => 'dom narożny',
     );
 
@@ -80,6 +82,11 @@ final class Topinstal_Lead_Widget_Defaults {
                 return array_key_exists('on_corner', $collected);
             case 'obecne_ogrzewanie':
                 return !empty($collected['obecne_ogrzewanie']) || self::should_assume_existing_heat_pump($collected);
+            case 'keep_existing_heat_source':
+                if (!self::should_ask_keep_existing_heat_source($collected)) {
+                    return true;
+                }
+                return array_key_exists('keep_existing_heat_source', $collected);
             case 'dhw_persons':
                 return !empty($collected['dhw_persons']);
             case 'dhw_usage':
@@ -246,6 +253,8 @@ final class Topinstal_Lead_Widget_Defaults {
                 return 'Jak intensywnie korzystacie z ciepłej wody?';
             case 'obecne_ogrzewanie':
                 return 'Czym ogrzewany jest dom obecnie — gaz, węgiel, olej, prąd lub inne?';
+            case 'keep_existing_heat_source':
+                return 'Czy obecne źródło ciepła ma pozostać jako dodatkowe źródło wspomagające pompę?';
             case 'on_corner':
                 return 'Czy dom szeregowy stoi na narożu ulicy (dom narożny)?';
             case 'ventilation_type':
@@ -274,6 +283,8 @@ final class Topinstal_Lead_Widget_Defaults {
             case 'postal_code':
             case 'obecne_ogrzewanie':
                 return !self::should_assume_existing_heat_pump($collected);
+            case 'keep_existing_heat_source':
+                return self::should_ask_keep_existing_heat_source($collected);
             case 'dhw_persons':
             case 'dhw_usage':
                 return self::is_residential_lead_type($building_type);
@@ -359,6 +370,13 @@ final class Topinstal_Lead_Widget_Defaults {
             $pending[] = array(
                 'field' => 'obecne_ogrzewanie',
                 'message' => 'Czym ogrzewany jest dom obecnie — gaz, węgiel, olej, prąd lub inne?',
+            );
+        }
+
+        if (self::should_ask_keep_existing_heat_source($collected) && !self::is_chat_field_satisfied($collected, 'keep_existing_heat_source')) {
+            $pending[] = array(
+                'field' => 'keep_existing_heat_source',
+                'message' => 'Czy obecne źródło ciepła ma pozostać jako dodatkowe źródło wspomagające pompę?',
             );
         }
 
@@ -533,6 +551,9 @@ final class Topinstal_Lead_Widget_Defaults {
             array('field' => 'dhw_usage', 'label' => self::FIELD_LABELS_PL['dhw_usage']),
             array('field' => 'obecne_ogrzewanie', 'label' => self::FIELD_LABELS_PL['obecne_ogrzewanie']),
         );
+        if (self::should_ask_keep_existing_heat_source($collected) || array_key_exists('keep_existing_heat_source', $collected)) {
+            $defs[] = array('field' => 'keep_existing_heat_source', 'label' => self::FIELD_LABELS_PL['keep_existing_heat_source']);
+        }
 
         if ($year >= 2000) {
             $defs[] = array('field' => 'ventilation_type', 'label' => self::FIELD_LABELS_PL['ventilation_type']);
@@ -582,6 +603,8 @@ final class Topinstal_Lead_Widget_Defaults {
                     : true;
             case 'obecne_ogrzewanie':
                 return self::is_chat_field_satisfied($collected, 'obecne_ogrzewanie');
+            case 'keep_existing_heat_source':
+                return self::is_chat_field_satisfied($collected, 'keep_existing_heat_source');
             default:
                 return self::is_chat_field_satisfied($collected, $field);
         }
@@ -607,6 +630,8 @@ final class Topinstal_Lead_Widget_Defaults {
                 return !empty($collected['hydraulics_confirmed']) && array_key_exists('radiators_is_ht', $collected);
             case 'has_underfloor_actuators':
                 return array_key_exists('has_underfloor_actuators', $collected);
+            case 'keep_existing_heat_source':
+                return array_key_exists('keep_existing_heat_source', $collected);
             default:
                 return self::is_chat_field_satisfied($collected, $field);
         }
@@ -632,6 +657,8 @@ final class Topinstal_Lead_Widget_Defaults {
                 return 'Wybierz intensywność zużycia ciepłej wody.';
             case 'obecne_ogrzewanie':
                 return 'Np. gaz, węgiel, pompa ciepła, prąd (ogrzewanie elektryczne).';
+            case 'keep_existing_heat_source':
+                return 'Odpowiedz: tak, jeśli stare źródło ma zostać jako wsparcie; nie, jeśli ma zostać wyłączone/usunięte.';
             case 'on_corner':
                 return 'Odpowiedz: tak lub nie.';
             case 'ventilation_type':
@@ -670,6 +697,7 @@ final class Topinstal_Lead_Widget_Defaults {
             'standard',
             'emitter_type',
             'obecne_ogrzewanie',
+            'keep_existing_heat_source',
             'contact_email',
             'postal_code',
             'ventilation_type',
@@ -735,6 +763,9 @@ final class Topinstal_Lead_Widget_Defaults {
         }
         if (array_key_exists('has_underfloor_actuators', $collected)) {
             $out['has_underfloor_actuators'] = self::to_bool($collected['has_underfloor_actuators']);
+        }
+        if (array_key_exists('keep_existing_heat_source', $collected)) {
+            $out['keep_existing_heat_source'] = self::to_bool($collected['keep_existing_heat_source']);
         }
         if (isset($collected['last_bufor_display'])) {
             $out['last_bufor_display'] = sanitize_text_field((string) $collected['last_bufor_display']);
@@ -809,7 +840,7 @@ final class Topinstal_Lead_Widget_Defaults {
         $insulation_level = self::resolve_insulation_level_for_calc($collected, $profile);
         $building = array_merge($building, self::insulation_level_to_ozc_fields($insulation_level));
 
-        if (!self::should_assume_existing_heat_pump($collected)) {
+        if (!self::should_assume_existing_heat_pump($collected) && self::should_keep_existing_heat_source($collected)) {
             $secondary = self::map_secondary_source(isset($collected['obecne_ogrzewanie']) ? $collected['obecne_ogrzewanie'] : '');
             if ($secondary !== '') {
                 $building['secondary_source_type'] = $secondary;
@@ -932,6 +963,45 @@ final class Topinstal_Lead_Widget_Defaults {
             return true;
         }
         return self::map_construction_year($standard) >= 2022;
+    }
+
+    /**
+     * @param array<string,mixed> $collected
+     * @return bool
+     */
+    public static function should_keep_existing_heat_source($collected) {
+        $collected = self::sanitize_collected($collected);
+        return array_key_exists('keep_existing_heat_source', $collected)
+            && !empty($collected['keep_existing_heat_source']);
+    }
+
+    /**
+     * @param array<string,mixed> $collected
+     * @return bool
+     */
+    public static function should_ask_keep_existing_heat_source($collected) {
+        if (self::should_assume_existing_heat_pump($collected)) {
+            return false;
+        }
+        $current = isset($collected['obecne_ogrzewanie']) ? (string) $collected['obecne_ogrzewanie'] : '';
+        return self::map_secondary_source($current) !== '';
+    }
+
+    /**
+     * @param array<string,mixed> $collected
+     * @return true|WP_Error
+     */
+    public static function validate_collected_for_calculate($collected) {
+        $collected = self::sanitize_collected($collected);
+        $raw = isset($collected['typ_budynku']) ? (string) $collected['typ_budynku'] : '';
+        if ($raw !== '' && self::map_building_type($raw) === '') {
+            return new WP_Error(
+                'tilw_unsupported_building_type',
+                'Nieobsługiwany typ budynku.',
+                array('status' => 400)
+            );
+        }
+        return true;
     }
 
     /**
@@ -1315,16 +1385,17 @@ final class Topinstal_Lead_Widget_Defaults {
     private static function map_building_type($value) {
         $map = array(
             'wolnostojacy' => 'single_house',
+            'wolnostojący' => 'single_house',
             'dom' => 'single_house',
             'single_house' => 'single_house',
             'blizniak' => 'double_house',
+            'bliźniak' => 'double_house',
             'double_house' => 'double_house',
             'szeregowiec' => 'row_house',
             'row_house' => 'row_house',
-            'inny' => 'single_house',
         );
         $key = strtolower(trim($value));
-        return isset($map[$key]) ? $map[$key] : 'single_house';
+        return isset($map[$key]) ? $map[$key] : '';
     }
 
     /**

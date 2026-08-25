@@ -148,6 +148,14 @@ final class Topinstal_Lead_Widget_Answer_Extractor {
 
         }
 
+        if ($pending_field === 'keep_existing_heat_source') {
+
+            $delta['keep_existing_heat_source'] = strpos($lower, 'tak') !== false
+
+                && strpos($lower, 'nie') === false;
+
+        }
+
 
 
         if (

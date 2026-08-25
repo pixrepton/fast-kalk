@@ -26,6 +26,11 @@ final class Topinstal_Lead_Widget_Calculator {
             ? Topinstal_Lead_Widget_Defaults::sanitize_collected($body['collected'])
             : array();
 
+        $validation = Topinstal_Lead_Widget_Defaults::validate_collected_for_calculate($collected);
+        if (is_wp_error($validation)) {
+            return $validation;
+        }
+
         $session_id = isset($collected['session_id']) ? trim((string) $collected['session_id']) : '';
         $fingerprint = Topinstal_Lead_Widget_Session_Store::fingerprint_collected($collected);
 

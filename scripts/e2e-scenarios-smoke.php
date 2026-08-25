@@ -131,9 +131,9 @@ $scenarios = array(
         'hydraulics_confirmed' => true,
         'radiators_is_ht' => true,
     ),
-    'wielorodzinny_intensywnie' => array(
-        'session_id' => 'e2e-inny-' . gmdate('His'),
-        'typ_budynku' => 'inny',
+    'szeregowiec_intensywnie' => array(
+        'session_id' => 'e2e-szereg-' . gmdate('His'),
+        'typ_budynku' => 'szeregowiec',
         'standard' => 'przed_1990',
         'emitter_type' => 'mieszane',
         'powierzchnia' => 320,
@@ -147,6 +147,7 @@ $scenarios = array(
         'hydraulics_confirmed' => true,
         'radiators_is_ht' => false,
         'has_underfloor_actuators' => true,
+        'on_corner' => false,
     ),
 );
 
