@@ -262,6 +262,39 @@
     }).format(n);
   }
 
+  function toFiniteNumber(value) {
+    var n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatKw(value) {
+    var n = toFiniteNumber(value);
+    if (n === null || n <= 0) {
+      return '';
+    }
+    return new Intl.NumberFormat('pl-PL', {
+      maximumFractionDigits: 1,
+    }).format(n) + ' kW';
+  }
+
+  function formatSelectionBasis(data) {
+    data = data || {};
+    var heatLoss = formatKw(data.heat_loss_kw);
+    var recommended = formatKw(data.recommended_power_kw);
+    var selected = formatKw(data.selection_power_kw);
+    var parts = [];
+    if (heatLoss) {
+      parts.push('zapotrzebowanie ' + heatLoss);
+    }
+    if (recommended) {
+      parts.push('moc rekomendowana ' + recommended);
+    }
+    if (selected && selected !== recommended) {
+      parts.push('dobrana pompa ' + selected);
+    }
+    return parts.length ? 'Dobór z kalk-top: ' + parts.join(' · ') : '';
+  }
+
   function parsePumpKw(model, modelRaw) {
     var s = String(modelRaw || model || '');
     var m = s.match(/\(([\d.,]+)\s*kW\)/i) || s.match(/([\d.,]+)\s*kW/i);
@@ -1363,6 +1396,14 @@
     specsLine.className = 'tilw-rc-specs';
     specsLine.textContent = formatSpecsInline(bufSpec, cwuSpec);
     compact.appendChild(specsLine);
+
+    var basisText = formatSelectionBasis(data);
+    if (basisText) {
+      var basisLine = document.createElement('p');
+      basisLine.className = 'tilw-rc-specs';
+      basisLine.textContent = basisText;
+      compact.appendChild(basisLine);
+    }
 
     if (data._delta) {
       var deltaEl = document.createElement('p');

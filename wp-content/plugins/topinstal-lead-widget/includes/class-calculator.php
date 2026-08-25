@@ -352,6 +352,7 @@ final class Topinstal_Lead_Widget_Calculator {
     private static function map_offer_to_summary($offer) {
         $engineering = isset($offer['engineering']) && is_array($offer['engineering']) ? $offer['engineering'] : array();
         $selection = isset($engineering['selection']) && is_array($engineering['selection']) ? $engineering['selection'] : array();
+        $ozc = isset($engineering['ozc']) && is_array($engineering['ozc']) ? $engineering['ozc'] : array();
         $buffer = isset($engineering['buffer']) && is_array($engineering['buffer']) ? $engineering['buffer'] : array();
         $cwu = isset($engineering['cwu']) && is_array($engineering['cwu']) ? $engineering['cwu'] : array();
         $pricing = isset($offer['pricing']) && is_array($offer['pricing']) ? $offer['pricing'] : array();
@@ -390,6 +391,21 @@ final class Topinstal_Lead_Widget_Calculator {
         $capacity = isset($selection['capacity_kW']) ? $selection['capacity_kW'] : (isset($selection['capacityKw']) ? $selection['capacityKw'] : null);
         if ($model !== '' && $capacity !== null && is_numeric($capacity)) {
             $model .= ' (' . round((float) $capacity, 1) . ' kW)';
+        }
+
+        $heat_loss_kw = null;
+        if (isset($ozc['designHeatLoss_kW']) && is_numeric($ozc['designHeatLoss_kW'])) {
+            $heat_loss_kw = round((float) $ozc['designHeatLoss_kW'], 1);
+        }
+        $recommended_power_kw = null;
+        if (isset($ozc['recommendedPower_kW']) && is_numeric($ozc['recommendedPower_kW'])) {
+            $recommended_power_kw = round((float) $ozc['recommendedPower_kW'], 1);
+        } elseif ($heat_loss_kw !== null) {
+            $recommended_power_kw = $heat_loss_kw;
+        }
+        $selection_power_kw = null;
+        if ($capacity !== null && is_numeric($capacity)) {
+            $selection_power_kw = round((float) $capacity, 1);
         }
 
         $buf_liters_int = self::parse_liters_value($buf_liters);
@@ -434,6 +450,9 @@ final class Topinstal_Lead_Widget_Calculator {
             'cwu_pojemnosc' => $cwu_liters_int > 0 ? (string) $cwu_liters_int . ' L' : '—',
             'cena_min' => $cena_min,
             'cena_max' => $cena_max,
+            'heat_loss_kw' => $heat_loss_kw,
+            'recommended_power_kw' => $recommended_power_kw,
+            'selection_power_kw' => $selection_power_kw,
             'orientacyjny' => true,
             'assumptions' => $assumptions,
             'warnings' => $warnings,

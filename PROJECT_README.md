@@ -70,7 +70,7 @@ mode: from-offer-dto
 
 [/register + contact_email]
   → class-offer-dispatch.php
-  → generator from-offer-dto (pełny OfferDTO + tank.capacity z CWU)
+  → generator from-offer-dto (pełny OfferDTO + context.machineRoomSnapshot + tank.capacity z CWU)
   → wp_mail() — operator [NOWY LEAD] + opcjonalnie klient
   → class-lead-registry.php → async Node B /internal/registry/links
 

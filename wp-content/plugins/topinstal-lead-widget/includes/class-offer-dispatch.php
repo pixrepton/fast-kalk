@@ -313,8 +313,114 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             'documentType' => 'offer_document',
             'outputFormat' => 'pdf',
             'offerDto' => $offer,
+            'context' => self::build_generator_context($offer, $trace_id, $engagement_id),
             'payload' => $payload,
         );
+    }
+
+    /**
+     * Keep the lead-widget document request on the same generator path as kalk-top:
+     * full OfferDTO plus calculator-style context and machine room snapshot.
+     *
+     * @param array<string,mixed> $offer
+     * @param string $trace_id
+     * @param string $engagement_id
+     * @return array<string,mixed>
+     */
+    private static function build_generator_context($offer, $trace_id, $engagement_id = '') {
+        $context = array(
+            'source' => 'fast-kalk',
+            'channel' => 'lead_widget',
+            'documentMode' => 'offer',
+            'generatedAt' => gmdate('c'),
+            'traceId' => $trace_id,
+            'machineRoomSnapshot' => self::build_machine_room_snapshot($offer),
+        );
+        $engagement_id = trim((string) $engagement_id);
+        if ($engagement_id !== '') {
+            $context['engagementId'] = $engagement_id;
+        }
+        return $context;
+    }
+
+    /**
+     * @param array<string,mixed> $offer
+     * @return array<string,mixed>
+     */
+    private static function build_machine_room_snapshot($offer) {
+        $engineering = isset($offer['engineering']) && is_array($offer['engineering']) ? $offer['engineering'] : array();
+        $selection = isset($engineering['selection']) && is_array($engineering['selection']) ? $engineering['selection'] : array();
+        $buffer = isset($engineering['buffer']) && is_array($engineering['buffer']) ? $engineering['buffer'] : array();
+        $cwu = isset($engineering['cwu']) && is_array($engineering['cwu']) ? $engineering['cwu'] : array();
+        $pricing = isset($offer['pricing']) && is_array($offer['pricing']) ? $offer['pricing'] : array();
+        $totals = isset($pricing['totals']) && is_array($pricing['totals']) ? $pricing['totals'] : array();
+
+        $components = array();
+        $pump_model = self::first_string(array(
+            self::read_path($selection, array('pumpModel')),
+            self::read_path($selection, array('pump_model')),
+        ));
+        $pump_power = self::first_number(array(
+            self::read_path($selection, array('capacity_kW')),
+            self::read_path($selection, array('capacityKw')),
+        ));
+        if ($pump_model !== '' || $pump_power !== null) {
+            $pump = array();
+            if ($pump_model !== '') {
+                $pump['model'] = $pump_model;
+                $pump['label'] = $pump_power !== null
+                    ? $pump_model . ' ' . self::format_decimal($pump_power) . ' kW'
+                    : $pump_model;
+            }
+            if ($pump_power !== null) {
+                $pump['power_kw'] = $pump_power;
+            }
+            $components['pump'] = $pump;
+        }
+
+        $cwu_capacity = self::first_number(array(
+            self::read_path($cwu, array('recommendedCapacityL')),
+            self::read_path($cwu, array('resolvedCapacityL')),
+            self::read_path($cwu, array('tankCapacityL')),
+        ));
+        if ($cwu_capacity !== null && $cwu_capacity > 0) {
+            $capacity_l = (int) round($cwu_capacity);
+            $components['cwu'] = array(
+                'label' => 'Trinnity ' . $capacity_l . ' L',
+                'name' => 'Trinnity',
+                'capacity_l' => $capacity_l,
+            );
+        }
+
+        $buffer_capacity = self::first_number(array(
+            self::read_path($buffer, array('liters')),
+            self::read_path($buffer, array('capacity_liters')),
+        ));
+        $setup_type = strtoupper(trim((string) self::read_path($buffer, array('setupType'))));
+        if ($buffer_capacity !== null && $buffer_capacity > 0) {
+            $capacity_l = (int) round($buffer_capacity);
+            $components['buffer'] = array(
+                'label' => 'Bufor ' . $capacity_l . ' L',
+                'capacity_l' => $capacity_l,
+            );
+        } elseif ($setup_type === 'NONE' || $buffer_capacity === 0.0) {
+            $components['buffer'] = array(
+                'label' => 'Bufor nie wymagany',
+            );
+        }
+
+        $snapshot = array(
+            'selected_components' => $components,
+        );
+        $gross = self::first_number(array(
+            self::read_path($totals, array('gross')),
+            self::read_path($totals, array('totalGross')),
+        ));
+        if ($gross !== null && $gross > 0) {
+            $snapshot['total_brutto_pln'] = (int) round($gross);
+        }
+
+        return $snapshot;
     }
 
     /**
@@ -387,21 +493,57 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
 
     /**
      * @param array<string,mixed> $offer
-     * @return array{pump_label:string,gross_pln:string,capacity_kw:string,buffer_liters:string,cwu_liters:string}
+     * @return array<string,string>
      */
     private static function extract_offer_facts($offer) {
         $engineering = isset($offer['engineering']) && is_array($offer['engineering']) ? $offer['engineering'] : array();
         $selection = isset($engineering['selection']) && is_array($engineering['selection']) ? $engineering['selection'] : array();
+        $ozc = isset($engineering['ozc']) && is_array($engineering['ozc']) ? $engineering['ozc'] : array();
         $buffer = isset($engineering['buffer']) && is_array($engineering['buffer']) ? $engineering['buffer'] : array();
         $cwu = isset($engineering['cwu']) && is_array($engineering['cwu']) ? $engineering['cwu'] : array();
         $pricing = isset($offer['pricing']) && is_array($offer['pricing']) ? $offer['pricing'] : array();
         $totals = isset($pricing['totals']) && is_array($pricing['totals']) ? $pricing['totals'] : array();
 
-        $pump_model = isset($selection['pumpModel']) ? (string) $selection['pumpModel'] : '';
-        $capacity = isset($selection['capacity_kW']) ? $selection['capacity_kW'] : '';
-        $gross = isset($totals['gross']) && is_numeric($totals['gross']) ? (int) round((float) $totals['gross']) : 0;
-        $buf_liters = isset($buffer['liters']) ? (string) $buffer['liters'] : '—';
-        $cwu_liters = isset($cwu['recommendedCapacityL']) ? (string) $cwu['recommendedCapacityL'] : '—';
+        $pump_model = self::first_string(array(
+            self::read_path($selection, array('pumpModel')),
+            self::read_path($selection, array('pump_model')),
+        ));
+        $capacity_number = self::first_number(array(
+            self::read_path($selection, array('capacity_kW')),
+            self::read_path($selection, array('capacityKw')),
+        ));
+        $capacity = $capacity_number !== null ? self::format_decimal($capacity_number) : '';
+        $gross_number = self::first_number(array(
+            self::read_path($totals, array('gross')),
+            self::read_path($totals, array('totalGross')),
+        ));
+        $gross = $gross_number !== null ? (int) round($gross_number) : 0;
+        $heat_loss = self::first_number(array(
+            self::read_path($ozc, array('designHeatLoss_kW')),
+            self::read_path($offer, array('meta', 'max_heating_power')),
+        ));
+        $recommended_power = self::first_number(array(
+            self::read_path($ozc, array('recommendedPower_kW')),
+            self::read_path($offer, array('meta', 'recommended_power_kw')),
+            $heat_loss,
+        ));
+        $heat_loss_kw = $heat_loss !== null ? self::format_decimal($heat_loss) : '—';
+        $recommended_power_kw = $recommended_power !== null ? self::format_decimal($recommended_power) : '—';
+        $buf_liters_number = self::first_number(array(
+            self::read_path($buffer, array('liters')),
+            self::read_path($buffer, array('capacity_liters')),
+        ));
+        $buf_liters = $buf_liters_number !== null && $buf_liters_number > 0
+            ? (string) (int) round($buf_liters_number)
+            : 'nie wymagany';
+        $cwu_liters_number = self::first_number(array(
+            self::read_path($cwu, array('recommendedCapacityL')),
+            self::read_path($cwu, array('resolvedCapacityL')),
+            self::read_path($cwu, array('tankCapacityL')),
+        ));
+        $cwu_liters = $cwu_liters_number !== null && $cwu_liters_number > 0
+            ? (string) (int) round($cwu_liters_number)
+            : '—';
 
         return array(
             'pump_label' => $pump_model !== '' ? $pump_model : 'Panasonic Aquarea',
@@ -409,6 +551,8 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
             'capacity_kw' => $capacity !== '' ? (string) $capacity : '—',
             'buffer_liters' => $buf_liters,
             'cwu_liters' => $cwu_liters,
+            'heat_loss_kw' => $heat_loss_kw,
+            'recommended_power_kw' => $recommended_power_kw,
         );
     }
 
@@ -421,20 +565,36 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
      */
     private static function build_operator_body($client_email, $facts, $trace_id, $collected) {
         $area = isset($collected['powierzchnia']) ? (string) $collected['powierzchnia'] . ' m²' : '—';
+        $postal_code = isset($collected['postal_code']) ? (string) $collected['postal_code'] : '—';
+        $building_type = isset($collected['typ_budynku']) ? (string) $collected['typ_budynku'] : '—';
+        $emitter = isset($collected['emitter_type']) ? (string) $collected['emitter_type'] : '—';
+        $buffer_label = self::liters_label($facts['buffer_liters']);
+        $cwu_label = self::liters_label($facts['cwu_liters']);
         $text = "Nowy lead z fast-kalk widget.\n\n"
             . "Klient: {$client_email}\n"
             . "Pompa: {$facts['pump_label']} ({$facts['capacity_kw']} kW)\n"
-            . "Bufor: {$facts['buffer_liters']} L | CWU: {$facts['cwu_liters']} L\n"
+            . "Zapotrzebowanie: {$facts['heat_loss_kw']} kW | moc rekomendowana: {$facts['recommended_power_kw']} kW\n"
+            . "Bufor: {$buffer_label} | CWU: {$cwu_label}\n"
             . "Cena brutto: {$facts['gross_pln']} PLN\n"
-            . "Powierzchnia: {$area}\n"
+            . "Budynek: {$building_type} | {$area} | {$postal_code} | {$emitter}\n"
             . "Trace: {$trace_id}\n";
-        $html = '<p>Nowy lead z <strong>fast-kalk</strong> widget.</p>'
-            . '<p><strong>Klient:</strong> ' . esc_html($client_email) . '<br>'
-            . '<strong>Pompa:</strong> ' . esc_html($facts['pump_label']) . ' (' . esc_html($facts['capacity_kw']) . ' kW)<br>'
-            . '<strong>Bufor:</strong> ' . esc_html($facts['buffer_liters']) . ' L | <strong>CWU:</strong> ' . esc_html($facts['cwu_liters']) . ' L<br>'
-            . '<strong>Cena brutto:</strong> ' . esc_html($facts['gross_pln']) . ' PLN<br>'
-            . '<strong>Powierzchnia:</strong> ' . esc_html($area) . '<br>'
-            . '<strong>Trace:</strong> ' . esc_html($trace_id) . '</p>';
+        $html = self::mail_shell(
+            'Nowy lead TOP-INSTAL',
+            'Oferta PDF została wygenerowana z pełnego OfferDTO przez top-instal-generator i dołączona do tej wiadomości.',
+            array(
+                'Klient' => $client_email,
+                'Dobór pompy' => $facts['pump_label'] . ' (' . $facts['capacity_kw'] . ' kW)',
+                'Zapotrzebowanie budynku' => $facts['heat_loss_kw'] . ' kW',
+                'Moc rekomendowana' => $facts['recommended_power_kw'] . ' kW',
+                'Bufor CO' => self::liters_label($facts['buffer_liters']),
+                'Zasobnik CWU' => self::liters_label($facts['cwu_liters']),
+                'Cena brutto' => $facts['gross_pln'] . ' PLN',
+                'Budynek' => $building_type . ' | ' . $area . ' | ' . $postal_code,
+                'Emisja ciepła' => $emitter,
+                'Trace' => $trace_id,
+            ),
+            'Źródło: fast-kalk lead-widget.'
+        );
 
         return array('text' => $text, 'html' => $html);
     }
@@ -445,19 +605,125 @@ final class Topinstal_Lead_Widget_Offer_Dispatch {
      */
     private static function build_client_body($facts) {
         $text = "Dzień dobry,\n\n"
-            . "W załączeniu przesyłamy orientacyjną ofertę na pompę ciepła Panasonic.\n\n"
+            . "W załączeniu przesyłamy orientacyjną ofertę PDF na pompę ciepła Panasonic.\n\n"
             . "Dobór: {$facts['pump_label']} ({$facts['capacity_kw']} kW)\n"
+            . "Zapotrzebowanie budynku: {$facts['heat_loss_kw']} kW\n"
             . "Szacunkowa cena brutto: {$facts['gross_pln']} PLN\n\n"
             . "Oferta ma charakter orientacyjny — dokładną wycenę przygotujemy po doprecyzowaniu parametrów.\n\n"
             . "Pozdrawiamy,\nZespół TOP-INSTAL\n";
-        $html = '<p>Dzień dobry,</p>'
-            . '<p>W załączeniu przesyłamy orientacyjną ofertę na pompę ciepła Panasonic.</p>'
-            . '<p><strong>Dobór:</strong> ' . esc_html($facts['pump_label']) . ' (' . esc_html($facts['capacity_kw']) . ' kW)<br>'
-            . '<strong>Szacunkowa cena brutto:</strong> ' . esc_html($facts['gross_pln']) . ' PLN</p>'
-            . '<p>Oferta ma charakter orientacyjny — dokładną wycenę przygotujemy po doprecyzowaniu parametrów.</p>'
-            . '<p>Pozdrawiamy,<br>Zespół TOP-INSTAL</p>';
+        $html = self::mail_shell(
+            'Twoja oferta TOP-INSTAL',
+            'W załączeniu przesyłamy orientacyjną ofertę PDF na pompę ciepła Panasonic.',
+            array(
+                'Rekomendowana pompa' => $facts['pump_label'] . ' (' . $facts['capacity_kw'] . ' kW)',
+                'Zapotrzebowanie budynku' => $facts['heat_loss_kw'] . ' kW',
+                'Moc rekomendowana' => $facts['recommended_power_kw'] . ' kW',
+                'Bufor CO' => self::liters_label($facts['buffer_liters']),
+                'Zasobnik CWU' => self::liters_label($facts['cwu_liters']),
+                'Szacunkowa cena brutto' => $facts['gross_pln'] . ' PLN',
+            ),
+            'Oferta ma charakter orientacyjny. Dokładną wycenę przygotujemy po doprecyzowaniu parametrów.'
+        );
 
         return array('text' => $text, 'html' => $html);
+    }
+
+    /**
+     * @param string $title
+     * @param string $intro
+     * @param array<string,string> $rows
+     * @param string $footer
+     * @return string
+     */
+    private static function mail_shell($title, $intro, $rows, $footer) {
+        $html = '<div style="font-family:Arial,Helvetica,sans-serif;color:#17202a;line-height:1.5;max-width:680px">';
+        $html .= '<div style="border-bottom:3px solid #e30613;padding-bottom:12px;margin-bottom:18px">';
+        $html .= '<div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#e30613;font-weight:700">TOP-INSTAL</div>';
+        $html .= '<h1 style="font-size:22px;margin:4px 0 0">' . esc_html($title) . '</h1>';
+        $html .= '</div>';
+        $html .= '<p style="margin:0 0 16px">' . esc_html($intro) . '</p>';
+        $html .= '<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:0 0 16px">';
+        foreach ($rows as $label => $value) {
+            $html .= '<tr>';
+            $html .= '<td style="border-top:1px solid #e5e7eb;padding:9px 10px;color:#64748b;width:42%">' . esc_html($label) . '</td>';
+            $html .= '<td style="border-top:1px solid #e5e7eb;padding:9px 10px;font-weight:700">' . esc_html($value) . '</td>';
+            $html .= '</tr>';
+        }
+        $html .= '</table>';
+        $html .= '<p style="margin:0 0 16px">' . esc_html($footer) . '</p>';
+        $html .= '<p style="margin:0;color:#64748b">Pozdrawiamy,<br>Zespół TOP-INSTAL</p>';
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * @param mixed $value
+     * @return string
+     */
+    private static function liters_label($value) {
+        $value = trim((string) $value);
+        if ($value === '' || $value === '—') {
+            return '—';
+        }
+        return is_numeric($value) ? $value . ' L' : $value;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param array<int,string> $path
+     * @return mixed|null
+     */
+    private static function read_path($data, $path) {
+        if (!is_array($data)) {
+            return null;
+        }
+        $cursor = $data;
+        foreach ($path as $segment) {
+            if (!is_array($cursor) || !array_key_exists($segment, $cursor)) {
+                return null;
+            }
+            $cursor = $cursor[$segment];
+        }
+        return $cursor;
+    }
+
+    /**
+     * @param array<int,mixed> $values
+     * @return string
+     */
+    private static function first_string($values) {
+        foreach ($values as $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+            $value = trim((string) $value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * @param array<int,mixed> $values
+     * @return float|null
+     */
+    private static function first_number($values) {
+        foreach ($values as $value) {
+            if (is_numeric($value)) {
+                return (float) $value;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param float|int $value
+     * @return string
+     */
+    private static function format_decimal($value) {
+        $formatted = number_format((float) $value, 1, ',', ' ');
+        return rtrim(rtrim($formatted, '0'), ',');
     }
 
     /**
