@@ -2,7 +2,7 @@
 /**
  * Plugin Name: TOP-INSTAL Lead Widget
  * Description: Wstępny dobór pompy ciepła — widget leadgen z chatem AI i silnikami kalk-top.
- * Version: 0.6.7
+ * Version: 0.6.8
  * Author: TOP-INSTAL
  * Text Domain: topinstal-lead-widget
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('TOPINSTAL_LEAD_WIDGET_VERSION', '0.6.7');
+define('TOPINSTAL_LEAD_WIDGET_VERSION', '0.6.8');
 define('TOPINSTAL_LEAD_WIDGET_DIR', plugin_dir_path(__FILE__));
 define('TOPINSTAL_LEAD_WIDGET_URL', plugin_dir_url(__FILE__));
 
