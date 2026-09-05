@@ -29,8 +29,7 @@ contact_email na /register:
 | `emitter_type`                              | `preferences.heating.emitterType`                                  | podlogowka / radiators / mixed                                          |
 | `dhw_persons`                               | `building.hot_water_persons`                                       | 2–3→3, 4–5→5, więcej→6                                                  |
 | `dhw_usage`                                 | `preferences.dhw.usageProfile`                                     | shower / shower_bath / bath                                             |
-| `obecne_ogrzewanie`                         | `lead_widget.current_heat_source`                                  | stan istniejący; nie aktywuje bivalencji samodzielnie                   |
-| `keep_existing_heat_source`                  | `building.secondary_source_type`, `bivalent_enabled`               | tylko gdy klient jawnie potwierdzi pozostawienie starego źródła         |
+| `obecne_ogrzewanie`                         | `building.secondary_source_type`, `bivalent_enabled`               | **pomijane** gdy `should_assume_existing_heat_pump()` (np. `w_budowie`) |
 | `ventilation_type`                          | `building.ventilation_type`, `preferences.heating.ventilationType` | warunkowe rok ≥ 2000                                                    |
 | `on_corner`                                 | `building.on_corner`                                               | tylko szeregowiec                                                       |
 | `contact_email`                             | `lead.contact.email` + dispatch                                    | **nie** wchodzi w fingerprint cache                                     |
@@ -41,22 +40,14 @@ contact_email na /register:
 | -------------------------- | --------------------------------- | ---------------------------------------------------------- |
 | `radiators_is_ht`          | `radiators_is_ht` (bool)          | emiter grzejniki/mieszane **oraz** `hydraulics_confirmed`  |
 | `has_underfloor_actuators` | `has_underfloor_actuators` (bool) | emiter mieszane, po odpowiedzi                             |
-| `keep_existing_heat_source` | `bivalent_source_type`            | `gas_boiler` / `solid_fuel_boiler` gdy bivalent w building |
+| `obecne_ogrzewanie`        | `bivalent_source_type`            | `gas_boiler` / `solid_fuel_boiler` gdy bivalent w building |
 | —                          | `bivalent_enabled`                | z `building.bivalent_enabled`                              |
 
 **Nie wysyłamy** `radiators_is_ht` bez potwierdzenia użytkownika — BufferEngine domyślnie traktuje brak jako `false` (niskotemperaturowe).
 
 ## Generator payload (dispatch)
 
-Dispatch wysyła `mode=from-offer-dto`, pełny `offerDto` oraz `context` zgodny ze ścieżką kalk-top:
-
-- `context.source=fast-kalk`
-- `context.channel=lead_widget`
-- `context.documentMode=offer`
-- `context.machineRoomSnapshot.selected_components.pump/cwu/buffer`
-- `context.machineRoomSnapshot.total_brutto_pln`
-
-Z `engineering.cwu.recommendedCapacityL` nadal trafia także `payload.tank.capacity` (Trinnity), żeby PDF CWU nie zgadywał z katalogu KIT.
+Z `engineering.cwu.recommendedCapacityL` → `payload.tank.capacity` (Trinnity), żeby PDF CWU nie zgadywał z katalogu KIT.
 
 ## Refinement (kod istnieje, UI wyłączone)
 

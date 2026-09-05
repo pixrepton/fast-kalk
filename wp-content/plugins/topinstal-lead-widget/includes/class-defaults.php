@@ -808,6 +808,10 @@ final class Topinstal_Lead_Widget_Defaults {
         $usage_profile = self::map_dhw_usage(isset($collected['dhw_usage']) ? $collected['dhw_usage'] : '');
         $ventilation = self::resolve_ventilation_type($collected, $construction_year);
         $location = self::resolve_location(isset($collected['postal_code']) ? $collected['postal_code'] : '');
+        $insulation_level = self::resolve_insulation_level_for_calc($collected, $profile);
+        $insulation_fields = self::insulation_level_to_ozc_fields($insulation_level);
+        $windows_type = self::resolve_windows_type($standard, $insulation_level);
+        $number_windows = self::infer_number_windows($area, $standard);
 
         $building = array(
             'heated_area' => $area,
@@ -816,9 +820,9 @@ final class Topinstal_Lead_Widget_Defaults {
             'construction_year' => $construction_year,
             'construction_type' => $profile['construction_type'],
             'building_type' => $building_type,
-            'windows_type' => $profile['windows_type'],
+            'windows_type' => $windows_type,
             'number_doors' => $profile['number_doors'],
-            'number_windows' => $profile['number_windows'],
+            'number_windows' => $number_windows,
             'source_type' => 'air-water',
             'location_id' => $location['location_id'],
             'include_hot_water' => 'yes',
@@ -837,8 +841,8 @@ final class Topinstal_Lead_Widget_Defaults {
             $building['on_corner'] = isset($collected['on_corner']) ? (bool) $collected['on_corner'] : false;
         }
 
-        $insulation_level = self::resolve_insulation_level_for_calc($collected, $profile);
-        $building = array_merge($building, self::insulation_level_to_ozc_fields($insulation_level));
+        $building = array_merge($building, $insulation_fields);
+        $building = self::apply_synthetic_wall_profile($building, $standard, $area);
 
         if (!self::should_assume_existing_heat_pump($collected) && self::should_keep_existing_heat_source($collected)) {
             $secondary = self::map_secondary_source(isset($collected['obecne_ogrzewanie']) ? $collected['obecne_ogrzewanie'] : '');
@@ -1057,6 +1061,177 @@ final class Topinstal_Lead_Widget_Defaults {
             $out['bottom_isolation'] = array('material' => 88, 'size' => 20);
         }
         return $out;
+    }
+
+    /**
+     * Coarse technology bucket used only by synthetic completion.
+     * The public Step 1 / Step 2 question flow is intentionally untouched.
+     *
+     * @param string $standard
+     * @return string pre_2000|y2000_2010|post_2010|new_build
+     */
+    private static function synthetic_standard_bucket($standard) {
+        $key = strtolower(trim((string) $standard));
+        if (in_array($key, array('stary', 'przed_1990', 'przed_2000'), true)) {
+            return 'pre_2000';
+        }
+        if (in_array($key, array('sredni', '1990_2010', '2000_2010'), true)) {
+            return 'y2000_2010';
+        }
+        if (in_array($key, array('nowy', 'po_2010'), true)) {
+            return 'post_2010';
+        }
+        if (in_array($key, array('w_budowie', 'bardzo_nowy', 'po_2020'), true)) {
+            return 'new_build';
+        }
+        return 'y2000_2010';
+    }
+
+    /**
+     * Infer thermal quality of windows from the building era, corrected by the
+     * insulation quality explicitly confirmed by the user. This is a synthetic
+     * assumption for fast-kalk, not a claim about the actual installed windows.
+     *
+     * @param string $standard
+     * @param string $insulation_level poor|average|good|very_good
+     * @return string
+     */
+    private static function resolve_windows_type($standard, $insulation_level) {
+        $bucket = self::synthetic_standard_bucket($standard);
+        $level = self::normalize_insulation_level((string) $insulation_level);
+        if ($level === '') {
+            $level = 'average';
+        }
+
+        if ($bucket === 'new_build') {
+            return 'new_triple_glass';
+        }
+        if ($bucket === 'post_2010') {
+            return $level === 'very_good' ? 'new_triple_glass' : 'new_double_glass';
+        }
+        if ($bucket === 'y2000_2010') {
+            return $level === 'very_good' ? 'new_double_glass' : 'semi_new_double_glass';
+        }
+
+        if ($level === 'very_good') {
+            return 'new_double_glass';
+        }
+        if ($level === 'good') {
+            return 'semi_new_double_glass';
+        }
+        return 'old_double_glass';
+    }
+
+    /**
+     * Estimate equivalent glazing area from heated area and era, then convert it
+     * to kalk-top's number_windows unit (1 equivalent window = 1.95 m2 glazing).
+     * The value represents equivalent glazing area, not a literal count of frames.
+     *
+     * @param int|float $heated_area
+     * @param string $standard
+     * @return int
+     */
+    private static function infer_number_windows($heated_area, $standard) {
+        $area = (float) $heated_area;
+        if ($area <= 0) {
+            $area = 120.0;
+        }
+
+        $bucket = self::synthetic_standard_bucket($standard);
+        $glazing_ratio = 0.145;
+        if ($bucket === 'pre_2000') {
+            $glazing_ratio = 0.13;
+        } elseif ($bucket === 'post_2010') {
+            $glazing_ratio = 0.16;
+        } elseif ($bucket === 'new_build') {
+            $glazing_ratio = 0.18;
+        }
+
+        $equivalent_window_area_m2 = 1.95;
+        $count = (int) round(($area * $glazing_ratio) / $equivalent_window_area_m2);
+        return max(3, $count);
+    }
+
+    /**
+     * Synthetic thermal equivalent of a typical load-bearing wall core for the
+     * building era. Material IDs are used only because kalk-top computes R from
+     * material lambda; they must not be interpreted as a claim about the real wall.
+     *
+     * Target core R-values are approximately:
+     * - pre 2000:     0.40 m2K/W  (material 101, 28 cm, lambda 0.70)
+     * - 2000-2010:    0.72 m2K/W  (material 57, 18 cm, lambda 0.25)
+     * - post 2010:    0.92 m2K/W  (material 57, 23 cm, lambda 0.25)
+     * - new / build:  1.12 m2K/W  (material 57, 28 cm, lambda 0.25)
+     *
+     * @param string $standard
+     * @return array{primary_wall_material:int,core_size_cm:float}
+     */
+    private static function synthetic_wall_profile_for_standard($standard) {
+        $bucket = self::synthetic_standard_bucket($standard);
+        if ($bucket === 'pre_2000') {
+            return array('primary_wall_material' => 101, 'core_size_cm' => 28.0);
+        }
+        if ($bucket === 'post_2010') {
+            return array('primary_wall_material' => 57, 'core_size_cm' => 23.0);
+        }
+        if ($bucket === 'new_build') {
+            return array('primary_wall_material' => 57, 'core_size_cm' => 28.0);
+        }
+        return array('primary_wall_material' => 57, 'core_size_cm' => 18.0);
+    }
+
+    /**
+     * Add the synthetic wall core without changing the user's heated-area meaning.
+     * kalk-top treats wall_size as total wall thickness and subtracts it from
+     * gross dimensions. Therefore fast-kalk provides synthetic gross dimensions
+     * whose net rectangle (ratio 1.3, matching kalk-top fallback geometry) equals
+     * the heated area supplied by the user.
+     *
+     * @param array<string,mixed> $building
+     * @param string $standard
+     * @param int|float $heated_area
+     * @return array<string,mixed>
+     */
+    private static function apply_synthetic_wall_profile($building, $standard, $heated_area) {
+        if (!is_array($building)) {
+            $building = array();
+        }
+
+        $wall = self::synthetic_wall_profile_for_standard($standard);
+        $external_iso_cm = 0.0;
+        if (
+            isset($building['external_wall_isolation'])
+            && is_array($building['external_wall_isolation'])
+            && isset($building['external_wall_isolation']['size'])
+            && is_numeric($building['external_wall_isolation']['size'])
+        ) {
+            $external_iso_cm = max(0.0, (float) $building['external_wall_isolation']['size']);
+        }
+
+        $wall_size_cm = (float) $wall['core_size_cm'] + $external_iso_cm;
+        $building['primary_wall_material'] = (int) $wall['primary_wall_material'];
+        $building['wall_size'] = round($wall_size_cm, 2);
+
+        $area = (float) $heated_area;
+        if ($area <= 0) {
+            $area = 120.0;
+        }
+
+        // Preserve kalk-top's default 1.3 rectangle while compensating for the
+        // wall-thickness deduction so the resulting net floor area stays equal
+        // to the user's heated area.
+        $ratio = 1.3;
+        $net_width_m = sqrt($area / $ratio);
+        $net_length_m = $area / $net_width_m;
+        $wall_thickness_m = $wall_size_cm / 100.0;
+        $gross_width_m = $net_width_m + 2.0 * $wall_thickness_m;
+        $gross_length_m = $net_length_m + 2.0 * $wall_thickness_m;
+
+        $building['building_width'] = round($gross_width_m, 3);
+        $building['building_length'] = round($gross_length_m, 3);
+        $building['floor_area'] = round($gross_width_m * $gross_length_m, 2);
+
+        return $building;
     }
 
     /**

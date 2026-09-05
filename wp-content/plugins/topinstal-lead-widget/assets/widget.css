@@ -873,9 +873,9 @@
   }
 
   .tilw-card {
-    height: var(--tilw-height);
+    height: auto;
     min-height: var(--tilw-height);
-    max-height: var(--tilw-height);
+    max-height: none;
   }
 
   .tilw-header {
